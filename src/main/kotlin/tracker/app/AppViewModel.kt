@@ -37,8 +37,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tracker.calibration.HomographyMapper
 import tracker.detect.YuNetDetector
+import tracker.usecase.CalibrationUseCase
 import tracker.dmx.DmxFixture
 import tracker.dmx.SpotlightController
 import tracker.scene.SceneData
@@ -87,8 +87,9 @@ class AppViewModel(
 
         var mapperOk = false
         val mapper = scene.calibration?.let { cal ->
-            runCatching { HomographyMapper(cal) }.getOrElse { null }
-                ?.also { mapperOk = true }
+            CalibrationUseCase.buildMapper(cal.points)
+                .onSuccess { mapperOk = true }
+                .getOrNull()
         }
 
         val calibStatus = when {

@@ -21,9 +21,9 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
-import tracker.calibration.HomographyMapper
 import tracker.scene.CalibrationData
 import tracker.scene.CalibrationPoint
+import tracker.usecase.CalibrationUseCase
 import tracker.scene.FixtureConfig
 import tracker.scene.SceneData
 
@@ -175,7 +175,7 @@ fun SceneEditorScreen(
                         val pan = pendingPan.toFloatOrNull()?.coerceIn(0f, 1f)
                         val tilt = pendingTilt.toFloatOrNull()?.coerceIn(0f, 1f)
                         val isDuplicate = pan != null && tilt != null &&
-                            calibPoints.any { it.pan == pan && it.tilt == tilt }
+                            CalibrationUseCase.isDuplicatePanTilt(calibPoints, pan, tilt)
                         if (isDuplicate) {
                             Text(
                                 "Такие pan/tilt уже есть в списке — у каждой точки должны быть разные значения.",
@@ -267,15 +267,15 @@ fun SceneEditorScreen(
             Spacer(Modifier.width(12.dp))
             Button(
                 onClick = {
-                    val calibData = if (calibPoints.size == 4) CalibrationData(calibPoints) else null
-                    if (calibData != null) {
-                        val err = runCatching { HomographyMapper(calibData) }.exceptionOrNull()
-                        if (err != null) {
+                    val calibData = if (calibPoints.size == 4) {
+                        val result = CalibrationUseCase.buildMapper(calibPoints)
+                        if (result.isFailure) {
                             calibError = "Калибровка недействительна: точки слишком близко или лежат на одной прямой. " +
                                 "Расположите 4 точки в углах площадки (как крест или прямоугольник)."
                             return@Button
                         }
-                    }
+                        CalibrationData(calibPoints)
+                    } else null
                     calibError = null
                     onSaved(SceneData(
                         name = name.trim(),
