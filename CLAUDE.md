@@ -44,31 +44,59 @@ CameraSource          — конфигурирует FrameGrabber (1280×720 @ 3
 
 ```
 src/main/kotlin/tracker/
-    Main.kt                            # тонкий wire-up: startKoin + when(AppState.screen)
-    di/AppModule.kt                    # Koin-модуль: CameraSource, YuNetDetector, Pipeline, AppViewModel
-    app/AppState.kt                    # AppState, AppScreen (sealed), CalibrationStatus
-    app/AppViewModel.kt                # StateHolder: навигация, spotlight lifecycle, pipeline-подписка
-    app/TrackingPipeline.kt            # единый Flow<DetectedFrame>: capture → detect → emit
-    capture/CameraSource.kt            # фабрика FrameGrabber'а
-    detect/FaceDetection.kt            # DTO: bbox + 5 keypoints в координатах кадра
-    detect/FaceTracker.kt              # стабильные ID (IoU фаза1 + centroid фаза2)
-    detect/TrackedFace.kt              # пара id + FaceDetection
-    detect/YuNetDetector.kt            # YuNet через JavaCV (FaceDetectorYN)
-    scene/SceneData.kt                 # @Serializable: SceneData, FixtureConfig, CalibrationData, CalibrationPoint
-    scene/SceneStore.kt                # read/write ~/.lighthouse/scenes/*.json
-    calibration/HomographyMapper.kt    # findHomography + map(px,py)→(pan,tilt)
-    dmx/DmxFixture.kt                  # 16-bit pan/tilt DMX буфер
-    dmx/ArtNetSender.kt                # Art-Net UDP транспорт: PanTilt → unicastDmx per fixture
-    dmx/SpotlightController.kt         # тонкий оркестратор: FacePositionMapper + ArtNetSender
-    usecase/CalibrationUseCase.kt      # isDuplicatePanTilt + buildMapper (валидация гомографии)
-    usecase/FacePositionMapper.kt      # data class PanTilt; resolve(frame,id,mapper?)→PanTilt?
-    ui/TrackingScreen.kt               # экран трекинга: CameraPreview + плавающий тулбар
-    ui/CameraPreview.kt                # Image + Canvas-оверлей; onRawClick для калибровки
-    ui/SceneManagerScreen.kt           # стартовый список сцен: загрузить / создать
-    ui/SceneEditorScreen.kt            # редактор сцены + 4-точечный калибровочный визард
+    Main.kt                                      # startKoin + when(AppState.screen)
+    di/AppModule.kt                              # Koin: wire-up всех синглтонов
+
+    # ── Domain (нет зависимостей на adapter/ui) ──────────────────────────────
+    domain/entity/FaceDetection.kt               # bbox + 5 keypoints + score
+    domain/entity/TrackedFace.kt                 # id + FaceDetection
+    domain/entity/SceneData.kt                   # SceneData, FixtureConfig, CalibrationData, CalibrationPoint
+    domain/entity/DmxFixture.kt                  # 16-bit pan/tilt DMX-буфер
+    domain/entity/PanTilt.kt                     # нормализованные pan/tilt [0,1]
+    domain/usecase/FaceTracker.kt                # стабильные ID (IoU фаза1 + centroid фаза2)
+    domain/usecase/CalibrationUseCase.kt         # isDuplicatePanTilt + buildMapper
+    domain/usecase/FacePositionMapper.kt         # resolve(frame,id,mapper?)→PanTilt?
+    domain/repository/SceneRepository.kt         # интерфейс персистентности сцен
+
+    # ── Adapter (зависит от domain) ──────────────────────────────────────────
+    adapter/camera/CameraSource.kt               # фабрика FrameGrabber (avfoundation / OpenCV)
+    adapter/camera/YuNetDetector.kt              # YuNet через JavaCV (FaceDetectorYN)
+    adapter/calibration/HomographyMapper.kt      # findHomography + map(px,py)→(pan,tilt)
+    adapter/dmx/ArtNetSender.kt                  # ArtNetClient + DmxFixture → unicastDmx
+    adapter/dmx/SpotlightController.kt           # FacePositionMapper + ArtNetSender
+    adapter/persistence/SceneStore.kt            # JSON-файлы ~/.lighthouse/scenes/
+
+    # ── App (orchestration, зависит от domain + adapter) ─────────────────────
+    app/AppState.kt                              # AppScreen (sealed), CalibrationStatus, AppState
+    app/AppViewModel.kt                          # навигация, spotlight lifecycle, pipeline-подписка
+    app/TrackingPipeline.kt                      # Flow<DetectedFrame>: capture → detect → emit
+
+    # ── UI (только Compose, зависит от app + domain) ─────────────────────────
+    ui/CameraPreview.kt                          # Image + FaceOverlay; onRawClick для калибровки
+    ui/TrackingScreen.kt                         # превью + плавающий тулбар
+    ui/SceneManagerScreen.kt                     # список сцен (использует SceneRepository)
+    ui/SceneEditorScreen.kt                      # редактор + 4-точечный калибровочный визард
+
 src/main/resources/models/
     face_detection_yunet_2023mar.onnx
 ```
+
+## Архитектура пакетов
+
+Проект следует Clean Architecture с правилом направления зависимостей:
+
+```
+domain  ←─── adapter ←─── app ←─── ui
+  ↑                         │
+  └─────────────────────────┘ (app зависит от domain напрямую)
+```
+
+- **`domain/`** — чистые бизнес-объекты и правила; никаких зависимостей на JavaCV, OpenCV, artnet4j, Compose.
+- **`adapter/`** — реализации интерфейсов из domain; зависит от нативных библиотек.
+- **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app.
+- **`ui/`** — Compose-экраны; зависят только от `app/` и `domain/entity/`; не импортируют `adapter/` напрямую.
+
+Нарушение: `FacePositionMapper` (domain/usecase) импортирует `HomographyMapper` (adapter/calibration). Математический трансформ без I/O — допустимое прагматичное исключение.
 
 ## Архитектурные принципы
 
