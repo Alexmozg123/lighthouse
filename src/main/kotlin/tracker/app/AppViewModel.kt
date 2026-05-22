@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tracker.detect.YuNetDetector
 import tracker.usecase.CalibrationUseCase
+import tracker.dmx.ArtNetSender
 import tracker.dmx.DmxFixture
 import tracker.dmx.SpotlightController
 import tracker.scene.SceneData
@@ -99,9 +100,9 @@ class AppViewModel(
         }
 
         spotlight = SpotlightController(
-            fixtures = scene.fixtures.map { cfg ->
+            sender = ArtNetSender(scene.fixtures.map { cfg ->
                 DmxFixture(cfg.host, cfg.subnet, cfg.universe, cfg.startChannel)
-            },
+            }),
             mapper = mapper,
         )
 

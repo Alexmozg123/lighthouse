@@ -58,7 +58,10 @@ src/main/kotlin/tracker/
     scene/SceneStore.kt                # read/write ~/.lighthouse/scenes/*.json
     calibration/HomographyMapper.kt    # findHomography + map(px,py)→(pan,tilt)
     dmx/DmxFixture.kt                  # 16-bit pan/tilt DMX буфер
-    dmx/SpotlightController.kt         # Art-Net отправка, HomographyMapper или linear fallback
+    dmx/ArtNetSender.kt                # Art-Net UDP транспорт: PanTilt → unicastDmx per fixture
+    dmx/SpotlightController.kt         # тонкий оркестратор: FacePositionMapper + ArtNetSender
+    usecase/CalibrationUseCase.kt      # isDuplicatePanTilt + buildMapper (валидация гомографии)
+    usecase/FacePositionMapper.kt      # data class PanTilt; resolve(frame,id,mapper?)→PanTilt?
     ui/TrackingScreen.kt               # экран трекинга: CameraPreview + плавающий тулбар
     ui/CameraPreview.kt                # Image + Canvas-оверлей; onRawClick для калибровки
     ui/SceneManagerScreen.kt           # стартовый список сцен: загрузить / создать
