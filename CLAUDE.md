@@ -53,28 +53,29 @@ src/main/kotlin/tracker/
     domain/entity/SceneData.kt                   # SceneData, FixtureConfig, CalibrationData, CalibrationPoint
     domain/entity/DmxFixture.kt                  # 16-bit pan/tilt DMX-буфер
     domain/entity/PanTilt.kt                     # нормализованные pan/tilt [0,1]
+    domain/usecase/PositionMapper.kt              # интерфейс map(px,py)→(pan,tilt)
     domain/usecase/FaceTracker.kt                # стабильные ID (IoU фаза1 + centroid фаза2)
-    domain/usecase/CalibrationUseCase.kt         # isDuplicatePanTilt + buildMapper
-    domain/usecase/FacePositionMapper.kt         # resolve(frame,id,mapper?)→PanTilt?
+    domain/usecase/CalibrationUseCase.kt         # isDuplicatePanTilt + buildMapper→Result<PositionMapper>
     domain/repository/SceneRepository.kt         # интерфейс персистентности сцен
 
     # ── Adapter (зависит от domain) ──────────────────────────────────────────
     adapter/camera/CameraSource.kt               # фабрика FrameGrabber (avfoundation / OpenCV)
     adapter/camera/YuNetDetector.kt              # YuNet через JavaCV (FaceDetectorYN)
-    adapter/calibration/HomographyMapper.kt      # findHomography + map(px,py)→(pan,tilt)
+    adapter/calibration/HomographyMapper.kt      # findHomography + реализует PositionMapper
     adapter/dmx/ArtNetSender.kt                  # ArtNetClient + DmxFixture → unicastDmx
-    adapter/dmx/SpotlightController.kt           # FacePositionMapper + ArtNetSender
     adapter/persistence/SceneStore.kt            # JSON-файлы ~/.lighthouse/scenes/
 
     # ── App (orchestration, зависит от domain + adapter) ─────────────────────
     app/AppState.kt                              # AppScreen (sealed), CalibrationStatus, AppState
-    app/AppViewModel.kt                          # навигация, spotlight lifecycle, pipeline-подписка
-    app/TrackingPipeline.kt                      # Flow<DetectedFrame>: capture → detect → emit
+    app/AppViewModel.kt                          # навигация, scenes StateFlow, spotlight lifecycle
+    app/TrackingPipeline.kt                      # Flow<DetectedFrame>: capture → detect → emit; владеет YuNetDetector
+    app/FacePositionResolver.kt                  # resolve(frame,id,mapper?)→PanTilt?
+    app/SpotlightController.kt                   # FacePositionMapper + ArtNetSender (оркестрация)
 
     # ── UI (только Compose, зависит от app + domain) ─────────────────────────
     ui/CameraPreview.kt                          # Image + FaceOverlay; onRawClick для калибровки
     ui/TrackingScreen.kt                         # превью + плавающий тулбар
-    ui/SceneManagerScreen.kt                     # список сцен (использует SceneRepository)
+    ui/SceneManagerScreen.kt                     # список сцен (только отображение, без repo)
     ui/SceneEditorScreen.kt                      # редактор + 4-точечный калибровочный визард
 
 src/main/resources/models/
@@ -93,10 +94,10 @@ domain  ←─── adapter ←─── app ←─── ui
 
 - **`domain/`** — чистые бизнес-объекты и правила; никаких зависимостей на JavaCV, OpenCV, artnet4j, Compose.
 - **`adapter/`** — реализации интерфейсов из domain; зависит от нативных библиотек.
-- **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app.
+- **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app; `FacePositionMapper` и `SpotlightController` — оркестрация domain+adapter.
 - **`ui/`** — Compose-экраны; зависят только от `app/` и `domain/entity/`; не импортируют `adapter/` напрямую.
 
-Нарушение: `FacePositionMapper` (domain/usecase) импортирует `HomographyMapper` (adapter/calibration). Математический трансформ без I/O — допустимое прагматичное исключение.
+Остаточное прагматичное исключение: `CalibrationUseCase.buildMapper` (domain) инстанциирует `HomographyMapper` (adapter) внутри себя, однако возвращает `Result<PositionMapper>` — вызывающий код зависит только от domain-интерфейса. Прямого вызова OpenCV в domain нет.
 
 ## Архитектурные принципы
 
@@ -104,8 +105,11 @@ domain  ←─── adapter ←─── app ←─── ui
 - **Detection coords = пиксели исходного кадра**. UI mapping в `FaceOverlay` учитывает `ContentScale.Fit` (letterboxing): пересчёт через `offset + p * scale`.
 - **ONNX/модели — в ресурсах**, на старте копируем в tmp-файл, отдаём путь нативной библиотеке (JavaCV/ONNX Runtime требуют файл на диске, не InputStream).
 - **Все лица в кадре**: `YuNetDetector.detect()` возвращает `List<FaceDetection>` — все обнаруженные лица без фильтрации. `DetectedFrame.faces` — список.
-- **YuNetDetector реализует `AutoCloseable`** — закрывается через `AppViewModel.close()`, который вызывается из `DisposableEffect(Unit)` в `Main.kt`. Раньше `DisposableEffect` держался прямо в Compose; теперь lifecycle владеет ViewModel.
-- **AppViewModel — единственная точка владения ресурсами** (`YuNetDetector`, `SpotlightController`). Koin создаёт его как синглтон (`single {}`); `close()` вызывается ровно один раз при закрытии окна. `startKoin` вызывается **до** `application {}`, чтобы не пересоздаваться при рекомпозиции.
+- **Lifecycle-цепочка**: `AppViewModel.close()` → `scope.cancel()` (останавливает сбор pipeline) → `pipeline.close()` → `detector.close()`. Детектор закрывается последним; `synchronized` в `YuNetDetector` защищает от use-after-free если IO-поток ещё внутри `detect()`.
+- **AppViewModel — единственная точка владения ресурсами** (`TrackingPipeline` + его `YuNetDetector`, `SpotlightController`). Koin создаёт его как синглтон (`single {}`); `close()` вызывается ровно один раз при закрытии окна. `startKoin` вызывается **до** `application {}`, чтобы не пересоздаваться при рекомпозиции.
+- **Единая навигационная система**: вся навигация идёт через `AppState.screen` и `AppViewModel`. `SceneManagerScreen` не содержит внутренних экранов — переход в редактор всегда через `AppScreen.SceneEditor(fromManager=true/false)`.
+- **SceneManagerScreen — pure UI**: никаких прямых вызовов `repo.save/delete`; только колбэки `onLoadScene/onEditScene/onDeleteScene/onNewScene`, реализованные в ViewModel.
+- **AppViewModel владеет сценами**: `scenes: StateFlow<List<SceneData>>` обновляется после каждого save/delete. UI подписывается на поток, не читает repo напрямую.
 
 ## Запуск
 

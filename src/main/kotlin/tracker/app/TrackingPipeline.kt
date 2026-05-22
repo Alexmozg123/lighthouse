@@ -18,13 +18,13 @@ import java.awt.image.BufferedImage
  * EN: Snapshot emitted for every camera frame that contains at least a valid image.
  *
  * [imageWidth] and [imageHeight] are the **original** frame dimensions (before any UI scaling).
- * They are used by [tracker.ui.CameraPreview] and [tracker.dmx.SpotlightController] to
+ * They are used by [tracker.ui.CameraPreview] and [SpotlightController] to
  * normalise face coordinates into [0, 1].
  *
  * RU: Снимок, эмитируемый для каждого кадра камеры, содержащего валидное изображение.
  *
  * [imageWidth] и [imageHeight] — **оригинальные** размеры кадра (до масштабирования UI).
- * Используются в [tracker.ui.CameraPreview] и [tracker.dmx.SpotlightController] для
+ * Используются в [tracker.ui.CameraPreview] и [SpotlightController] для
  * нормализации координат лиц в [0, 1].
  *
  * @param image       Compose-ready bitmap for display / Compose-битмап для отображения
@@ -43,6 +43,10 @@ data class DetectedFrame(
  * EN: Combines camera capture, face detection, and face tracking into a single
  * `Flow<DetectedFrame>` running on [Dispatchers.IO].
  *
+ * Owns the [YuNetDetector] lifecycle: [close] shuts down the detector. The pipeline
+ * must be closed after its collection scope is cancelled to avoid a use-after-free
+ * race (the detector is thread-safe via `synchronized`, so closing after cancel is safe).
+ *
  * **One-shot frame constraint**: each [FrameGrabber.grab] call returns a `Frame` whose
  * internal pixel buffer is overwritten by the next `grab`. Therefore both the OpenCV `Mat`
  * (needed by the detector) and the `BufferedImage` (needed by the UI) are derived from the
@@ -54,6 +58,10 @@ data class DetectedFrame(
  * RU: Объединяет захват камеры, детекцию лиц и трекинг лиц в единый
  * `Flow<DetectedFrame>` на [Dispatchers.IO].
  *
+ * Владеет жизненным циклом [YuNetDetector]: [close] завершает работу детектора. Pipeline
+ * должен закрываться после отмены scope сбора, чтобы избежать race use-after-free
+ * (детектор потокобезопасен через `synchronized`, поэтому закрытие после отмены безопасно).
+ *
  * **Ограничение одноразового кадра**: каждый вызов [FrameGrabber.grab] возвращает `Frame`,
  * внутренний буфер пикселей которого перезаписывается следующим `grab`. Поэтому и
  * OpenCV `Mat` (нужен детектору), и `BufferedImage` (нужен UI) получаются из одного
@@ -64,13 +72,14 @@ data class DetectedFrame(
  * треков между эмиссиями.
  *
  * @param camera   configured but not yet started camera source / настроенный источник камеры (не запущен)
- * @param detector face detector instance shared with the caller /
- *                 экземпляр детектора лиц, общий с вызывающей стороной
+ * @param detector face detector instance; owned by this pipeline /
+ *                 экземпляр детектора лиц; принадлежит этому pipeline
  */
 class TrackingPipeline(
     private val camera: CameraSource,
     private val detector: YuNetDetector,
-) {
+) : AutoCloseable {
+
     /**
      * EN: Returns a cold `Flow` that, upon collection, opens the grabber, loops indefinitely
      * emitting one [DetectedFrame] per camera frame, and releases all resources when the
@@ -114,4 +123,10 @@ class TrackingPipeline(
             matConv.close()
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * EN: Closes the [YuNetDetector]. Call only after the collection scope has been cancelled.
+     * RU: Закрывает [YuNetDetector]. Вызывать только после отмены scope сбора.
+     */
+    override fun close() = detector.close()
 }

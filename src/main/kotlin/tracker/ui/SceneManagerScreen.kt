@@ -10,57 +10,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.StateFlow
-import tracker.app.DetectedFrame
 import tracker.domain.entity.SceneData
-import tracker.domain.repository.SceneRepository
 
 /**
  * EN: Full-screen composable shown on startup. Lists saved scenes and lets the user
- * load one or open the editor to create a new one.
+ * load one, edit it, delete it, or create a new one.
  *
- * [onSceneSelected] is called when the user confirms a scene (either loaded or newly created).
- * The composable re-reads [repo] when [SceneEditorScreen] closes so the list stays current.
+ * All mutations (save, delete) and all navigation decisions are delegated to
+ * [AppViewModel][tracker.app.AppViewModel] via callbacks — this composable is purely
+ * presentational.
  *
  * RU: Полноэкранный компосабл, показываемый при запуске. Отображает сохранённые сцены
- * и позволяет загрузить одну из них или открыть редактор для создания новой.
+ * и позволяет загрузить, отредактировать, удалить или создать новую.
  *
- * [onSceneSelected] вызывается когда пользователь подтверждает сцену (загруженную или новую).
- * Список перечитывается из [repo] после закрытия [SceneEditorScreen].
+ * Все мутации (сохранение, удаление) и навигационные решения делегируются
+ * [AppViewModel][tracker.app.AppViewModel] через колбэки — компосабл только отображает данные.
  *
- * @param repo            persistence operations for scenes / операции персистентности сцен
- * @param frameFlow       live camera frames, forwarded to [SceneEditorScreen] for the calibration preview /
- *                        живые кадры камеры, передаются в [SceneEditorScreen] для превью калибровки
- * @param onSceneSelected called with the chosen [SceneData] / вызывается с выбранной [SceneData]
+ * @param scenes        current list of saved scenes / текущий список сохранённых сцен
+ * @param onLoadScene   called when the user picks a scene to activate / вызывается при выборе сцены для активации
+ * @param onEditScene   called when the user wants to edit a scene / вызывается при запросе редактирования
+ * @param onDeleteScene called when the user deletes a scene / вызывается при удалении сцены
+ * @param onNewScene    called when the user wants to create a new scene / вызывается при создании новой сцены
  */
 @Composable
 fun SceneManagerScreen(
-    repo: SceneRepository,
-    frameFlow: StateFlow<DetectedFrame?>,
-    onSceneSelected: (SceneData) -> Unit,
+    scenes: List<SceneData>,
+    onLoadScene: (SceneData) -> Unit,
+    onEditScene: (SceneData) -> Unit,
+    onDeleteScene: (SceneData) -> Unit,
+    onNewScene: () -> Unit,
 ) {
-    var scenes by remember { mutableStateOf(repo.listScenes()) }
-    var showEditor by remember { mutableStateOf(false) }
-    var editingScene by remember { mutableStateOf<SceneData?>(null) }
-
-    if (showEditor) {
-        SceneEditorScreen(
-            initial = editingScene,
-            frameFlow = frameFlow,
-            onSaved = { scene: SceneData ->
-                repo.save(scene)
-                scenes = repo.listScenes()
-                showEditor = false
-                editingScene = null
-            },
-            onCancelled = {
-                showEditor = false
-                editingScene = null
-            },
-        )
-        return
-    }
-
     Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFF1A1A2E)).padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -81,16 +60,16 @@ fun SceneManagerScreen(
                 items(scenes) { scene ->
                     SceneRow(
                         scene = scene,
-                        onLoad = { onSceneSelected(scene) },
-                        onEdit = { editingScene = scene; showEditor = true },
-                        onDelete = { repo.delete(scene); scenes = repo.listScenes() },
+                        onLoad = { onLoadScene(scene) },
+                        onEdit = { onEditScene(scene) },
+                        onDelete = { onDeleteScene(scene) },
                     )
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
 
-        Button(onClick = { editingScene = null; showEditor = true }) {
+        Button(onClick = onNewScene) {
             Text("Новая сцена")
         }
     }

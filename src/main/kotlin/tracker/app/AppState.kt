@@ -42,17 +42,18 @@ sealed interface AppScreen {
     data class Tracking(val scene: SceneData) : AppScreen
 
     /**
-     * EN: Scene editor opened from the tracking screen to edit the active scene.
-     * [scene] is the scene being edited; null means creating a new scene from scratch
-     * (only occurs if navigated without an active scene, which should not happen in normal flow).
+     * EN: Scene editor. [scene] is the scene being edited; null means creating a new scene.
+     * [fromManager] is true when navigation originated from [SceneManager] (not from [Tracking]);
+     * used by [AppViewModel] to decide where to return after save or cancel.
      *
-     * RU: Редактор сцены, открытый из экрана трекинга для правки активной сцены.
-     * [scene] — редактируемая сцена; null означает создание новой (не должно происходить
-     * в нормальном флоу).
+     * RU: Редактор сцены. [scene] — редактируемая сцена; null означает создание новой.
+     * [fromManager] равен true, когда навигация пришла из [SceneManager] (не из [Tracking]);
+     * [AppViewModel] использует это поле чтобы решить, куда вернуться после сохранения или отмены.
      *
-     * @param scene EN: scene to edit, or null / RU: редактируемая сцена или null
+     * @param scene       EN: scene to edit, or null for a new scene / RU: редактируемая сцена или null для новой
+     * @param fromManager EN: true when opened from SceneManager / RU: true если открыт из SceneManager
      */
-    data class SceneEditor(val scene: SceneData?) : AppScreen
+    data class SceneEditor(val scene: SceneData?, val fromManager: Boolean = false) : AppScreen
 }
 
 /**

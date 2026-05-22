@@ -3,13 +3,15 @@
  * Declares all singletons needed by [AppViewModel].
  *
  * Lifecycle: [AppViewModel] is a singleton tied to the application process.
- * Its [AutoCloseable.close] is called by the Compose window's DisposableEffect.
+ * Its [AutoCloseable.close] is called by the Compose window's DisposableEffect,
+ * which in turn closes [TrackingPipeline] (and its owned [YuNetDetector]).
  *
  * RU: Koin-модуль зависимостей приложения Lighthouse.
  * Объявляет все синглтоны, необходимые для [AppViewModel].
  *
  * Жизненный цикл: [AppViewModel] — синглтон уровня процесса.
- * Его [AutoCloseable.close] вызывается DisposableEffect Compose-окна.
+ * Его [AutoCloseable.close] вызывается DisposableEffect Compose-окна,
+ * что в свою очередь закрывает [TrackingPipeline] (и принадлежащий ему [YuNetDetector]).
  */
 package tracker.di
 

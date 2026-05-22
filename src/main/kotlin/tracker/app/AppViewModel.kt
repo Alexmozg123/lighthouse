@@ -1,29 +1,29 @@
 /**
  * EN: Application-level state holder. Owns the camera pipeline subscription,
- * the [SpotlightController] lifecycle, and all top-level navigation state.
+ * the [SpotlightController] lifecycle, scene persistence, and all top-level navigation state.
  *
  * The class is constructed once by the Koin container and destroyed when the
  * Compose window closes via [close]. It exposes two separate flows:
  * - [state] for infrequent navigation/calibration changes (causes recomposition of routing)
- * - [frameFlow] for every camera frame (30 fps; consumed only by [CameraPreview])
+ * - [frameFlow] for every camera frame (30 fps; consumed only by [tracker.ui.CameraPreview])
  *
  * Thread-safety: [spotlight] is written only from [loadScene] which is called from the
  * Main (UI) thread, and read from the IO-dispatched lambda inside [init]. The
  * @Volatile annotation ensures visibility across these two threads.
  *
  * RU: Хранитель состояния уровня приложения. Владеет подпиской на камерный pipeline,
- * жизненным циклом [SpotlightController] и всей верхнеуровневой навигацией.
+ * жизненным циклом [SpotlightController], персистентностью сцен и всей верхнеуровневой навигацией.
  *
  * Класс создаётся один раз Koin-контейнером и уничтожается при закрытии
  * Compose-окна через [close]. Он предоставляет два отдельных потока:
  * - [state] для редких изменений навигации/калибровки
- * - [frameFlow] для каждого кадра камеры (30 fps; потребляется только [CameraPreview])
+ * - [frameFlow] для каждого кадра камеры (30 fps; потребляется только [tracker.ui.CameraPreview])
  *
  * Потокобезопасность: [spotlight] пишется только из [loadScene] (UI-поток) и
  * читается из IO-лямбды внутри [init]. @Volatile обеспечивает видимость.
  *
- * @param pipeline EN: camera capture + detection pipeline / RU: pipeline захвата и детекции
- * @param detector EN: YuNet face detector; owned here for lifecycle management / RU: детектор YuNet; владение для управления жизненным циклом
+ * @param pipeline EN: camera capture + detection pipeline; owned for lifecycle / RU: pipeline захвата и детекции; владение для жизненного цикла
+ * @param repo     EN: scene persistence; read on init and after every save/delete / RU: персистентность сцен; читается при запуске и после сохранения/удаления
  */
 package tracker.app
 
@@ -37,16 +37,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tracker.adapter.camera.YuNetDetector
 import tracker.adapter.dmx.ArtNetSender
-import tracker.adapter.dmx.SpotlightController
 import tracker.domain.entity.DmxFixture
 import tracker.domain.entity.SceneData
+import tracker.domain.repository.SceneRepository
 import tracker.domain.usecase.CalibrationUseCase
 
 class AppViewModel(
     private val pipeline: TrackingPipeline,
-    private val detector: YuNetDetector,
+    private val repo: SceneRepository,
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -60,9 +59,13 @@ class AppViewModel(
     private val _selectedIdFlow = MutableStateFlow<Int?>(null)
     val selectedIdFlow: StateFlow<Int?> = _selectedIdFlow.asStateFlow()
 
+    private val _scenes = MutableStateFlow<List<SceneData>>(emptyList())
+    val scenes: StateFlow<List<SceneData>> = _scenes.asStateFlow()
+
     @Volatile private var spotlight: SpotlightController? = null
 
     init {
+        _scenes.value = repo.listScenes()
         scope.launch {
             pipeline.frames().collect { frame ->
                 _frameFlow.value = frame
@@ -110,12 +113,37 @@ class AppViewModel(
     }
 
     /**
-     * EN: Saves [scene] and activates it (same as [loadScene]).
-     * RU: Сохраняет [scene] и активирует её (аналог [loadScene]).
+     * EN: Persists [scene], refreshes the scene list, then navigates based on where the editor
+     * was opened from: returns to [AppScreen.SceneManager] if opened from there, or activates
+     * the scene via [loadScene] if opened from the Tracking screen.
      *
-     * @param scene EN: saved scene to activate / RU: сохранённая сцена для активации
+     * RU: Сохраняет [scene], обновляет список сцен, затем навигирует в зависимости от того,
+     * откуда был открыт редактор: возвращается в [AppScreen.SceneManager] если оттуда, или
+     * активирует сцену через [loadScene] если из экрана трекинга.
+     *
+     * @param scene EN: saved scene / RU: сохранённая сцена
      */
-    fun onSceneSaved(scene: SceneData) = loadScene(scene)
+    fun onSceneSaved(scene: SceneData) {
+        repo.save(scene)
+        _scenes.value = repo.listScenes()
+        val fromManager = (_state.value.screen as? AppScreen.SceneEditor)?.fromManager ?: false
+        if (fromManager) {
+            _state.update { it.copy(screen = AppScreen.SceneManager) }
+        } else {
+            loadScene(scene)
+        }
+    }
+
+    /**
+     * EN: Deletes [scene] from persistence and refreshes the scene list.
+     * RU: Удаляет [scene] из хранилища и обновляет список сцен.
+     *
+     * @param scene EN: scene to delete / RU: сцена для удаления
+     */
+    fun deleteScene(scene: SceneData) {
+        repo.delete(scene)
+        _scenes.value = repo.listScenes()
+    }
 
     /**
      * EN: Sets the face ID to follow. Pass null to blackout all fixtures.
@@ -136,44 +164,66 @@ class AppViewModel(
     }
 
     /**
-     * EN: Opens the scene editor for the currently active scene.
-     * Must only be called from the Tracking screen.
+     * EN: Opens the editor to create a new scene. Navigation origin is marked as [AppScreen.SceneManager].
+     * RU: Открывает редактор для создания новой сцены. Источник навигации помечается как [AppScreen.SceneManager].
+     */
+    fun navigateToNewSceneEditor() {
+        _state.update { it.copy(screen = AppScreen.SceneEditor(scene = null, fromManager = true)) }
+    }
+
+    /**
+     * EN: Opens the editor for [scene] from the scene manager.
+     * RU: Открывает редактор для [scene] из менеджера сцен.
      *
-     * RU: Открывает редактор для текущей активной сцены.
-     * Должен вызываться только с экрана трекинга.
+     * @param scene EN: scene to edit / RU: сцена для редактирования
+     */
+    fun navigateToSceneEditorFor(scene: SceneData) {
+        _state.update { it.copy(screen = AppScreen.SceneEditor(scene = scene, fromManager = true)) }
+    }
+
+    /**
+     * EN: Opens the editor for the currently active scene from the Tracking screen.
+     * Must only be called when the current screen is [AppScreen.Tracking].
+     *
+     * RU: Открывает редактор для текущей активной сцены из экрана трекинга.
+     * Должен вызываться только когда текущий экран — [AppScreen.Tracking].
      */
     fun navigateToSceneEditor() {
         val current = (_state.value.screen as? AppScreen.Tracking)?.scene
-        _state.update { it.copy(screen = AppScreen.SceneEditor(current)) }
+        _state.update { it.copy(screen = AppScreen.SceneEditor(scene = current, fromManager = false)) }
     }
 
     /**
      * EN: Returns to the previous screen on editor cancellation:
-     * - Tracking if the editor was opened with a scene
-     * - SceneManager otherwise
+     * - [AppScreen.SceneManager] if the editor was opened from there
+     * - [AppScreen.Tracking] with the original scene if opened from the tracking screen
      *
      * RU: Возвращается на предыдущий экран при отмене редактора:
-     * - Tracking если редактор был открыт со сценой
-     * - SceneManager иначе
+     * - [AppScreen.SceneManager] если редактор был открыт оттуда
+     * - [AppScreen.Tracking] с оригинальной сценой если из экрана трекинга
      */
     fun navigateBack() {
         val prev = when (val s = _state.value.screen) {
-            is AppScreen.SceneEditor -> if (s.scene != null) AppScreen.Tracking(s.scene) else AppScreen.SceneManager
+            is AppScreen.SceneEditor -> if (s.fromManager) {
+                AppScreen.SceneManager
+            } else {
+                s.scene?.let { AppScreen.Tracking(it) } ?: AppScreen.SceneManager
+            }
             else -> AppScreen.SceneManager
         }
         _state.update { it.copy(screen = prev) }
     }
 
     /**
-     * EN: Releases all resources: spotlight controller, face detector, and coroutine scope.
-     * Must be called from the UI thread when the window closes.
+     * EN: Releases all resources: spotlight controller, camera pipeline (and its detector),
+     * and coroutine scope. Must be called from the UI thread when the window closes.
      *
-     * RU: Освобождает все ресурсы: контроллер прожектора, детектор лиц и coroutine scope.
-     * Должен вызываться из UI-потока при закрытии окна.
+     * RU: Освобождает все ресурсы: контроллер прожектора, камерный pipeline (и его детектор),
+     * и coroutine scope. Должен вызываться из UI-потока при закрытии окна.
      */
     override fun close() {
         spotlight?.close()
-        detector.close()
         scope.cancel()
+        pipeline.close()
     }
 }

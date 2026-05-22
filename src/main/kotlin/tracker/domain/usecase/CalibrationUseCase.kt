@@ -13,6 +13,8 @@ import tracker.domain.entity.CalibrationPoint
  *
  * [buildMapper] performs a single OpenCV call that both validates the geometry and
  * produces the ready-to-use mapper — avoiding a double construction.
+ * The return type is [PositionMapper] so callers depend only on the domain interface,
+ * not on the concrete adapter implementation.
  *
  * RU: Доменные правила для 4-точечного процесса калибровки камера→pan/tilt.
  *
@@ -21,7 +23,8 @@ import tracker.domain.entity.CalibrationPoint
  * 2. Четыре точки должны образовывать невырожденное проективное отображение.
  *
  * [buildMapper] выполняет единственный вызов OpenCV, одновременно валидируя геометрию
- * и создавая готовый маппер.
+ * и создавая готовый маппер. Тип возврата — [PositionMapper], чтобы вызывающий код
+ * зависел только от доменного интерфейса, а не от конкретной реализации адаптера.
  */
 object CalibrationUseCase {
 
@@ -37,17 +40,17 @@ object CalibrationUseCase {
         existing.any { it.pan == pan && it.tilt == tilt }
 
     /**
-     * EN: Validates [points] (exactly 4) and constructs a [HomographyMapper].
+     * EN: Validates [points] (exactly 4) and constructs a [PositionMapper].
      * Returns [Result.failure] when the geometry is degenerate (collinear points, duplicates, etc.).
      *
-     * RU: Валидирует [points] (ровно 4) и создаёт [HomographyMapper].
+     * RU: Валидирует [points] (ровно 4) и создаёт [PositionMapper].
      * Возвращает [Result.failure] при вырожденной геометрии (коллинеарные точки, дубликаты и т. д.).
      *
      * @param points exactly 4 calibration correspondences / ровно 4 соответствия калибровки
      * @return [Result] with mapper on success, or wrapped exception on failure /
      *         [Result] с маппером при успехе или обёрнутым исключением при ошибке
      */
-    fun buildMapper(points: List<CalibrationPoint>): Result<HomographyMapper> {
+    fun buildMapper(points: List<CalibrationPoint>): Result<PositionMapper> {
         require(points.size == 4) { "Exactly 4 calibration points required, got ${points.size}" }
         return runCatching { HomographyMapper(CalibrationData(points)) }
     }
