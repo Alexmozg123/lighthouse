@@ -37,12 +37,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tracker.detect.YuNetDetector
-import tracker.usecase.CalibrationUseCase
-import tracker.dmx.ArtNetSender
-import tracker.dmx.DmxFixture
-import tracker.dmx.SpotlightController
-import tracker.scene.SceneData
+import tracker.adapter.camera.YuNetDetector
+import tracker.adapter.dmx.ArtNetSender
+import tracker.adapter.dmx.SpotlightController
+import tracker.domain.entity.DmxFixture
+import tracker.domain.entity.SceneData
+import tracker.domain.usecase.CalibrationUseCase
 
 class AppViewModel(
     private val pipeline: TrackingPipeline,

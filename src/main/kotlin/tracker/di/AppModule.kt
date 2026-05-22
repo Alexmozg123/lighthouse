@@ -14,12 +14,12 @@
 package tracker.di
 
 import org.koin.dsl.module
+import tracker.adapter.camera.CameraSource
+import tracker.adapter.camera.YuNetDetector
+import tracker.adapter.persistence.SceneStore
 import tracker.app.AppViewModel
 import tracker.app.TrackingPipeline
-import tracker.capture.CameraSource
-import tracker.detect.YuNetDetector
-import tracker.repository.SceneRepository
-import tracker.scene.SceneStore
+import tracker.domain.repository.SceneRepository
 
 val appModule = module {
     single { CameraSource(deviceIndex = 0) }

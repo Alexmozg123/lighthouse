@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import org.bytedeco.javacv.Java2DFrameConverter
 import org.bytedeco.javacv.OpenCVFrameConverter
-import tracker.capture.CameraSource
-import tracker.detect.FaceTracker
-import tracker.detect.TrackedFace
-import tracker.detect.YuNetDetector
+import tracker.adapter.camera.CameraSource
+import tracker.adapter.camera.YuNetDetector
+import tracker.domain.entity.TrackedFace
+import tracker.domain.usecase.FaceTracker
 import java.awt.image.BufferedImage
 
 /**

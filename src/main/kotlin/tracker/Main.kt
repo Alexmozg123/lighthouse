@@ -25,7 +25,7 @@ import org.koin.core.context.startKoin
 import tracker.app.AppScreen
 import tracker.app.AppViewModel
 import tracker.di.appModule
-import tracker.repository.SceneRepository
+import tracker.domain.repository.SceneRepository
 import tracker.ui.SceneEditorScreen
 import tracker.ui.SceneManagerScreen
 import tracker.ui.TrackingScreen

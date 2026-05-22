@@ -9,7 +9,7 @@
  */
 package tracker.app
 
-import tracker.scene.SceneData
+import tracker.domain.entity.SceneData
 
 /**
  * EN: Indicates how the coordinate mapping is working for the active scene.

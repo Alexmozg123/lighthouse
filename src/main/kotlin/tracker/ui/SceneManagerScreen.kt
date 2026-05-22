@@ -12,8 +12,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
-import tracker.repository.SceneRepository
-import tracker.scene.SceneData
+import tracker.domain.entity.SceneData
+import tracker.domain.repository.SceneRepository
 
 /**
  * EN: Full-screen composable shown on startup. Lists saved scenes and lets the user

@@ -1,4 +1,4 @@
-package tracker.capture
+package tracker.adapter.camera
 
 import org.bytedeco.javacv.FFmpegFrameGrabber
 import org.bytedeco.javacv.FrameGrabber
@@ -6,25 +6,16 @@ import org.bytedeco.javacv.OpenCVFrameGrabber
 
 /**
  * EN: Factory that creates and configures a [FrameGrabber] for the system webcam.
- * The actual frame loop lives in [tracker.app.TrackingPipeline] so that detection
- * and conversion happen before the next [FrameGrabber.grab] overwrites the internal buffer.
- *
- * On macOS [FFmpegFrameGrabber] with `avfoundation` is used because it supports
- * `pixel_format = "uyvy422"` and provides native camera access without additional drivers.
- * On all other platforms [OpenCVFrameGrabber] is used as a portable fallback.
+ * On macOS [FFmpegFrameGrabber] with `avfoundation` is used; on all other platforms
+ * [OpenCVFrameGrabber] is the portable fallback.
  *
  * RU: Фабрика, создающая и настраивающая [FrameGrabber] для системной веб-камеры.
- * Сам цикл обработки кадров живёт в [tracker.app.TrackingPipeline], чтобы детекция
- * и конвертация выполнялись до того, как следующий вызов [FrameGrabber.grab]
- * перезапишет внутренний буфер.
+ * На macOS используется [FFmpegFrameGrabber] с `avfoundation`; на остальных платформах —
+ * [OpenCVFrameGrabber].
  *
- * На macOS используется [FFmpegFrameGrabber] с `avfoundation` — поддерживает
- * `pixel_format = "uyvy422"` и обеспечивает нативный доступ к камере без лишних
- * драйверов. На остальных платформах — [OpenCVFrameGrabber] как портируемый fallback.
- *
- * @param deviceIndex camera device index / индекс камеры (0 = первая/первая доступная)
- * @param width       requested capture width in pixels / запрошенная ширина захвата в пикселях
- * @param height      requested capture height in pixels / запрошенная высота захвата в пикселях
+ * @param deviceIndex camera device index / индекс камеры (0 = первая доступная)
+ * @param width       requested capture width / запрошенная ширина захвата
+ * @param height      requested capture height / запрошенная высота захвата
  * @param targetFps   requested frame rate / запрошенная частота кадров
  */
 class CameraSource(

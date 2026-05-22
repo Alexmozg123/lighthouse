@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.CalibrationStatus
 import tracker.app.DetectedFrame
-import tracker.scene.SceneData
+import tracker.domain.entity.SceneData
 
 @Composable
 fun TrackingScreen(

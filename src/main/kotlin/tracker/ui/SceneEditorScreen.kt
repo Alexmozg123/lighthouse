@@ -21,11 +21,11 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
-import tracker.scene.CalibrationData
-import tracker.scene.CalibrationPoint
-import tracker.usecase.CalibrationUseCase
-import tracker.scene.FixtureConfig
-import tracker.scene.SceneData
+import tracker.domain.entity.CalibrationData
+import tracker.domain.entity.CalibrationPoint
+import tracker.domain.usecase.CalibrationUseCase
+import tracker.domain.entity.FixtureConfig
+import tracker.domain.entity.SceneData
 
 /**
  * EN: Composable for creating or editing a [SceneData].
