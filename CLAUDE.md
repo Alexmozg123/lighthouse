@@ -70,7 +70,7 @@ src/main/kotlin/tracker/
     app/AppViewModel.kt                          # навигация, scenes StateFlow, spotlight lifecycle
     app/TrackingPipeline.kt                      # Flow<DetectedFrame>: capture → detect → emit; владеет YuNetDetector
     app/FacePositionResolver.kt                  # resolve(frame,id,mapper?)→PanTilt?
-    app/SpotlightController.kt                   # FacePositionMapper + ArtNetSender (оркестрация)
+    app/SpotlightController.kt                   # FacePositionResolver + ArtNetSender (оркестрация)
 
     # ── UI (только Compose, зависит от app + domain) ─────────────────────────
     ui/CameraPreview.kt                          # Image + FaceOverlay; onRawClick для калибровки
@@ -94,7 +94,7 @@ domain  ←─── adapter ←─── app ←─── ui
 
 - **`domain/`** — чистые бизнес-объекты и правила; никаких зависимостей на JavaCV, OpenCV, artnet4j, Compose.
 - **`adapter/`** — реализации интерфейсов из domain; зависит от нативных библиотек.
-- **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app; `FacePositionMapper` и `SpotlightController` — оркестрация domain+adapter.
+- **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app; `FacePositionResolver` и `SpotlightController` — оркестрация domain+adapter.
 - **`ui/`** — Compose-экраны; зависят только от `app/` и `domain/entity/`; не импортируют `adapter/` напрямую.
 
 Остаточное прагматичное исключение: `CalibrationUseCase.buildMapper` (domain) инстанциирует `HomographyMapper` (adapter) внутри себя, однако возвращает `Result<PositionMapper>` — вызывающий код зависит только от domain-интерфейса. Прямого вызова OpenCV в domain нет.
