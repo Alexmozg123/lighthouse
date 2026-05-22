@@ -25,6 +25,7 @@ import org.koin.core.context.startKoin
 import tracker.app.AppScreen
 import tracker.app.AppViewModel
 import tracker.di.appModule
+import tracker.repository.SceneRepository
 import tracker.ui.SceneEditorScreen
 import tracker.ui.SceneManagerScreen
 import tracker.ui.TrackingScreen
@@ -40,6 +41,7 @@ fun main() {
             state = rememberWindowState(width = 1280.dp, height = 800.dp),
         ) {
             val viewModel = remember { GlobalContext.get().get<AppViewModel>() }
+            val repo = remember { GlobalContext.get().get<SceneRepository>() }
             val state by viewModel.state.collectAsState()
 
             DisposableEffect(Unit) {
@@ -50,6 +52,7 @@ fun main() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     when (val screen = state.screen) {
                         is AppScreen.SceneManager -> SceneManagerScreen(
+                            repo = repo,
                             frameFlow = viewModel.frameFlow,
                             onSceneSelected = { viewModel.loadScene(it) },
                         )

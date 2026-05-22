@@ -18,10 +18,13 @@ import tracker.app.AppViewModel
 import tracker.app.TrackingPipeline
 import tracker.capture.CameraSource
 import tracker.detect.YuNetDetector
+import tracker.repository.SceneRepository
+import tracker.scene.SceneStore
 
 val appModule = module {
     single { CameraSource(deviceIndex = 0) }
     single { YuNetDetector() }
     single { TrackingPipeline(get(), get()) }
+    single<SceneRepository> { SceneStore }
     single { AppViewModel(get(), get()) }
 }

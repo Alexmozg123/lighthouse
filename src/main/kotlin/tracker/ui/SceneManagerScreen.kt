@@ -12,32 +12,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
+import tracker.repository.SceneRepository
 import tracker.scene.SceneData
-import tracker.scene.SceneStore
 
 /**
  * EN: Full-screen composable shown on startup. Lists saved scenes and lets the user
  * load one or open the editor to create a new one.
  *
  * [onSceneSelected] is called when the user confirms a scene (either loaded or newly created).
- * The composable re-reads [SceneStore] when [SceneEditorScreen] closes so the list stays current.
+ * The composable re-reads [repo] when [SceneEditorScreen] closes so the list stays current.
  *
  * RU: Полноэкранный компосабл, показываемый при запуске. Отображает сохранённые сцены
  * и позволяет загрузить одну из них или открыть редактор для создания новой.
  *
  * [onSceneSelected] вызывается когда пользователь подтверждает сцену (загруженную или новую).
- * Список перечитывается из [SceneStore] после закрытия [SceneEditorScreen].
+ * Список перечитывается из [repo] после закрытия [SceneEditorScreen].
  *
+ * @param repo            persistence operations for scenes / операции персистентности сцен
  * @param frameFlow       live camera frames, forwarded to [SceneEditorScreen] for the calibration preview /
  *                        живые кадры камеры, передаются в [SceneEditorScreen] для превью калибровки
  * @param onSceneSelected called with the chosen [SceneData] / вызывается с выбранной [SceneData]
  */
 @Composable
 fun SceneManagerScreen(
+    repo: SceneRepository,
     frameFlow: StateFlow<DetectedFrame?>,
     onSceneSelected: (SceneData) -> Unit,
 ) {
-    var scenes by remember { mutableStateOf(SceneStore.listScenes()) }
+    var scenes by remember { mutableStateOf(repo.listScenes()) }
     var showEditor by remember { mutableStateOf(false) }
     var editingScene by remember { mutableStateOf<SceneData?>(null) }
 
@@ -46,8 +48,8 @@ fun SceneManagerScreen(
             initial = editingScene,
             frameFlow = frameFlow,
             onSaved = { scene: SceneData ->
-                SceneStore.save(scene)
-                scenes = SceneStore.listScenes()
+                repo.save(scene)
+                scenes = repo.listScenes()
                 showEditor = false
                 editingScene = null
             },
@@ -81,7 +83,7 @@ fun SceneManagerScreen(
                         scene = scene,
                         onLoad = { onSceneSelected(scene) },
                         onEdit = { editingScene = scene; showEditor = true },
-                        onDelete = { SceneStore.delete(scene); scenes = SceneStore.listScenes() },
+                        onDelete = { repo.delete(scene); scenes = repo.listScenes() },
                     )
                 }
             }

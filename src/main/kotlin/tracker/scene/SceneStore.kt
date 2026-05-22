@@ -2,6 +2,7 @@ package tracker.scene
 
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import tracker.repository.SceneRepository
 import java.nio.file.Path
 import kotlin.io.path.*
 
@@ -20,7 +21,7 @@ import kotlin.io.path.*
  * Все операции синхронные и предназначены для вызова только из UI-потока
  * во время выбора сцены (не в горячем цикле камеры).
  */
-object SceneStore {
+object SceneStore : SceneRepository {
 
     private val dir: Path = Path(System.getProperty("user.home"), ".lighthouse", "scenes")
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
@@ -32,7 +33,7 @@ object SceneStore {
      * RU: Возвращает все корректные сцены с диска, отсортированные по имени.
      * Файлы с ошибками парсинга молча пропускаются.
      */
-    fun listScenes(): List<SceneData> {
+    override fun listScenes(): List<SceneData> {
         if (!dir.exists()) return emptyList()
         return dir.listDirectoryEntries("*.json")
             .mapNotNull { runCatching { json.decodeFromString<SceneData>(it.readText()) }.getOrNull() }
@@ -48,7 +49,7 @@ object SceneStore {
      *
      * @param scene scene to persist / сцена для сохранения
      */
-    fun save(scene: SceneData) {
+    override fun save(scene: SceneData) {
         dir.createDirectories()
         dir.resolve("${sanitize(scene.name)}.json").writeText(json.encodeToString(scene))
     }
@@ -60,7 +61,7 @@ object SceneStore {
      *
      * @param scene scene to delete / сцена для удаления
      */
-    fun delete(scene: SceneData) {
+    override fun delete(scene: SceneData) {
         dir.resolve("${sanitize(scene.name)}.json").deleteIfExists()
     }
 
