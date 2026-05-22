@@ -14,4 +14,7 @@ data class FaceDetection(
     val rightMouth: FacePoint,
     val leftMouth: FacePoint,
     val score: Float,
-)
+) {
+    val centerX: Float get() = boxX + boxW / 2f
+    val centerY: Float get() = boxY + boxH / 2f
+}
