@@ -19,8 +19,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
-import tracker.detect.FaceDetection
-import tracker.detect.FacePoint
 
 @Composable
 fun CameraPreview(
@@ -47,9 +45,8 @@ fun CameraPreview(
 
 @Composable
 private fun FaceOverlay(frame: DetectedFrame) {
-    val face = frame.face ?: return
+    if (frame.faces.isEmpty()) return
     Canvas(modifier = Modifier.fillMaxSize()) {
-        // Image нарисован c ContentScale.Fit — считаем фактическую область отрисовки внутри Canvas
         val containerAspect = size.width / size.height
         val imageAspect = frame.imageWidth.toFloat() / frame.imageHeight.toFloat()
         val drawWidth: Float
@@ -68,28 +65,13 @@ private fun FaceOverlay(frame: DetectedFrame) {
         fun mapX(x: Float) = offsetX + x * scale
         fun mapY(y: Float) = offsetY + y * scale
 
-        drawRect(
-            color = Color.Green,
-            topLeft = Offset(mapX(face.boxX), mapY(face.boxY)),
-            size = Size(face.boxW * scale, face.boxH * scale),
-            style = Stroke(width = 2f),
-        )
-
-        listOf(
-            face.rightEye to Color.Red,
-            face.leftEye to Color.Red,
-            face.nose to Color.Yellow,
-            face.rightMouth to Color.Cyan,
-            face.leftMouth to Color.Cyan,
-        ).forEach { (p: FacePoint, c: Color) ->
-            drawCircle(
-                color = c,
-                radius = 4f,
-                center = Offset(mapX(p.x), mapY(p.y)),
+        frame.faces.forEach { face ->
+            drawRect(
+                color = Color.Green,
+                topLeft = Offset(mapX(face.boxX), mapY(face.boxY)),
+                size = Size(face.boxW * scale, face.boxH * scale),
+                style = Stroke(width = 2f),
             )
         }
     }
 }
-
-@Suppress("unused")
-private fun debugUnused(d: FaceDetection) = d.score

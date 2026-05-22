@@ -1,19 +1,20 @@
 # Lighthouse
 
-Desktop-приложение, которое следит за выбранной точкой на лице через веб-камеру и управляет световой головой по DMX, чтобы её луч ехал за этой точкой.
+Desktop-приложение, которое видит все лица на сцене через веб-камеру, позволяет выбрать одно из них кликом и управляет световой головой по DMX так, чтобы луч следил за выбранным человеком.
 
-Стек: Kotlin / JVM, Compose Multiplatform for Desktop, OpenCV (через JavaCV), MediaPipe FaceMesh (через ONNX Runtime), Art-Net для DMX.
+Стек: Kotlin / JVM, Compose Multiplatform for Desktop, OpenCV YuNet (через JavaCV), Art-Net для DMX.
 
-## Возможности
+## Текущий статус
 
-- Захват видео с веб-камеры в реальном времени.
-- Детекция лица и ключевых точек (YuNet → MediaPipe FaceMesh, 468 landmark'ов).
-- Выбор любой точки на лице как «точку интереса».
-- 4-точечная калибровка камеры в pan/tilt пространство световой головы (homography).
-- Сглаживание движения (One-Euro filter), чтобы голова не дёргалась.
-- Отправка DMX по Art-Net на физический Art-Net node, OLA или виртуальный приёмник (QLC+).
-
-Текущий статус — см. [раздел «Дорожная карта»](#дорожная-карта).
+- [x] Bootstrap проекта (Gradle, Compose, JavaCV).
+- [x] Захват веб-камеры и превью (1280×720, avfoundation на macOS).
+- [x] YuNet face detection — все лица в кадре одновременно, bbox + 5 keypoints.
+- [ ] UI выбора POI: клик по лицу → это лицо становится целью прожектора.
+- [ ] Face tracking: стабильные ID между кадрами, чтобы выбор не терялся.
+- [ ] Art-Net DMX sender + DmxFixture.
+- [ ] 4-точечная homography калибровка камера → pan/tilt.
+- [ ] One-Euro filter сглаживания.
+- [ ] Edge cases: лицо пропало, потеря камеры, blackout.
 
 ## Требования
 
@@ -34,6 +35,12 @@ JDK 21 ставим один раз. macOS:
 brew install --cask temurin@21
 ```
 
+ONNX-модели хранятся в Git LFS. Установи его до клонирования, иначе вместо модели скачается текстовый указатель и приложение упадёт на старте:
+```bash
+brew install git-lfs
+git lfs install
+```
+
 Если Gradle не находит JDK 21 автоматически, пропиши путь в `~/.gradle/gradle.properties` (per-machine, в репо не лежит):
 ```properties
 org.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
@@ -50,70 +57,44 @@ org.gradle.java.home=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/H
 ## Сборка дистрибутива
 
 ```bash
-./gradlew packageDmg              # macOS .dmg
+./gradlew packageDmg
 ./gradlew packageDistributionForCurrentOS
 ```
 
 ## Архитектура
 
 ```
-┌──────────────┐  Frame   ┌──────────────┐  Landmarks  ┌──────────────┐  norm xy  ┌──────────────┐  DMX  ┌──────────────┐
-│ CameraSource │ ───────▶ │ FaceDetector │ ──────────▶ │  Smoother    │ ────────▶ │   Mapper     │ ────▶ │ ArtNetSender │
-│  (JavaCV)    │          │ (YuNet+Mesh) │             │ (One-Euro)   │           │ (homography) │       │  (ArtNet4J)  │
-└──────────────┘          └──────────────┘             └──────────────┘           └──────────────┘       └──────────────┘
-        │                         │                            │                          │
-        └─────── StateFlow<DetectedFrame> ─────────────────────┴── UI overlay (Compose) ──┘
+CameraSource (JavaCV) → TrackingPipeline → StateFlow<DetectedFrame>
+                              │                      │
+                         YuNetDetector          CameraPreview (Compose)
+                       (все лица в кадре)       Image + FaceOverlay
 ```
 
-Конвейер живёт в одном `Flow`, на каждой стадии работает в своём `Dispatcher`. UI подписывается на `StateFlow` и перерисовывает превью с оверлеем поверх.
+Конвейер живёт в одном `Flow` на `Dispatchers.IO`. UI подписывается на `StateFlow` и перерисовывает превью с оверлеем поверх кадра.
 
 ## Структура проекта
 
 ```
-gradle/libs.versions.toml     — version catalog (единая точка для всех зависимостей)
-build.gradle.kts              — Kotlin 2.0 + Compose 1.7 + JavaCV + ONNX Runtime
-settings.gradle.kts
+gradle/libs.versions.toml     — version catalog
+build.gradle.kts              — Kotlin 2.0 + Compose 1.7 + JavaCV
 src/main/kotlin/tracker/
     Main.kt                   — Compose entry-point
     capture/                  — захват с веб-камеры
-    detect/                   — детекция лица и landmark'ов
-    smooth/                   — One-Euro filter
-    calibration/              — homography камера → pan/tilt
-    dmx/                      — Art-Net и описание fixture
-    app/                      — TrackingPipeline, координация
+    detect/                   — YuNet детекция лиц
+    app/                      — TrackingPipeline, DetectedFrame
     ui/                       — Compose-компоненты
-src/main/resources/models/    — ONNX-модели
+src/main/resources/models/    — ONNX-модели (YuNet)
 ```
-
-## Конфигурация фикстуры
-
-DMX-карта световой головы описывается через `DmxFixture` — каналы pan, pan-fine, tilt, tilt-fine, dimmer и базовый адрес во вселенной. Перед использованием убедись, что значения совпадают с твоей моделью головы.
-
-## Калибровка
-
-В UI: «Калибровка» → последовательно навести луч на 4 угла кадра камеры (вручную крутишь pan/tilt слайдерами), зафиксировать каждый угол. Приложение посчитает `Imgproc.findHomography` и сохранит матрицу в `~/.lighthouse/calib.json`. Калибровать заново нужно при любом изменении взаимного положения камеры и головы.
-
-## Дорожная карта
-
-- [x] Bootstrap проекта (Gradle, Compose, JavaCV).
-- [x] Захват веб-камеры и превью.
-- [x] YuNet face detection с 5 keypoints.
-- [ ] MediaPipe FaceMesh (468 landmark'ов) через ONNX Runtime.
-- [ ] UI выбора точки интереса кликом.
-- [ ] Art-Net DMX sender.
-- [ ] 4-точечная homography калибровка.
-- [ ] One-Euro filter.
-- [ ] Edge cases: лицо пропало, потеря камеры, blackout.
 
 ## Разработка
 
-Все версии зависимостей — в [gradle/libs.versions.toml](gradle/libs.versions.toml). Шпаргалка по проекту и грабли, на которые уже наступали, — в [CLAUDE.md](CLAUDE.md).
+Все версии зависимостей — в [gradle/libs.versions.toml](gradle/libs.versions.toml). Шпаргалка по проекту и грабли — в [CLAUDE.md](CLAUDE.md).
 
-Полезные таски Gradle:
 ```bash
-./gradlew compileKotlin
+./gradlew compileKotlin                   # быстрая проверка ошибок
+./gradlew run                             # запустить
 ./gradlew tasks --group "compose desktop"
-./gradlew --stop                                  # рестарт демона
+./gradlew --stop                          # рестарт демона
 ```
 
 ## Лицензия

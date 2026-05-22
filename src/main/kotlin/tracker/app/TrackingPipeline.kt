@@ -17,7 +17,7 @@ data class DetectedFrame(
     val image: ImageBitmap,
     val imageWidth: Int,
     val imageHeight: Int,
-    val face: FaceDetection?,
+    val faces: List<FaceDetection>,
 )
 
 /**
@@ -46,7 +46,7 @@ class TrackingPipeline(
                         image = bi.toComposeImageBitmap(),
                         imageWidth = bi.width,
                         imageHeight = bi.height,
-                        face = detection,
+                        faces = detection,
                     )
                 )
             }
