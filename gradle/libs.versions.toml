@@ -5,12 +5,14 @@ coroutines = "1.8.1"
 javacv = "1.5.10"
 artnet4j = "0.6.2"
 serialization = "1.7.3"
+koin = "3.5.6"
 
 [libraries]
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 javacv-platform = { module = "org.bytedeco:javacv-platform", version.ref = "javacv" }
 artnet4j = { module = "ch.bildspur:artnet4j", version.ref = "artnet4j" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

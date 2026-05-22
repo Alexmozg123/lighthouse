@@ -10,7 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
 import tracker.scene.SceneData
 import tracker.scene.SceneStore
@@ -34,7 +34,7 @@ import tracker.scene.SceneStore
  */
 @Composable
 fun SceneManagerScreen(
-    frameFlow: MutableStateFlow<DetectedFrame?>,
+    frameFlow: StateFlow<DetectedFrame?>,
     onSceneSelected: (SceneData) -> Unit,
 ) {
     var scenes by remember { mutableStateOf(SceneStore.listScenes()) }

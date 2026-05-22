@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
 import tracker.calibration.HomographyMapper
 import tracker.scene.CalibrationData
@@ -61,7 +62,7 @@ import tracker.scene.SceneData
 @Composable
 fun SceneEditorScreen(
     initial: SceneData?,
-    frameFlow: MutableStateFlow<DetectedFrame?>,
+    frameFlow: StateFlow<DetectedFrame?>,
     onSaved: (SceneData) -> Unit,
     onCancelled: () -> Unit,
 ) {

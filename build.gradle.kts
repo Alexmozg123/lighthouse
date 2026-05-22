@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.javacv.platform)
     implementation(libs.artnet4j)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.koin.core)
 }
 
 compose.desktop {
