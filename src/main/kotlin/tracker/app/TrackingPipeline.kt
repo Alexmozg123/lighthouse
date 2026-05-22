@@ -9,7 +9,8 @@ import kotlinx.coroutines.flow.flowOn
 import org.bytedeco.javacv.Java2DFrameConverter
 import org.bytedeco.javacv.OpenCVFrameConverter
 import tracker.capture.CameraSource
-import tracker.detect.FaceDetection
+import tracker.detect.FaceTracker
+import tracker.detect.TrackedFace
 import tracker.detect.YuNetDetector
 import java.awt.image.BufferedImage
 
@@ -17,11 +18,11 @@ data class DetectedFrame(
     val image: ImageBitmap,
     val imageWidth: Int,
     val imageHeight: Int,
-    val faces: List<FaceDetection>,
+    val faces: List<TrackedFace>,
 )
 
 /**
- * Захват + детекция в одном flow: Frame из grabber'а одноразовый
+ * Захват + детекция + трекинг в одном flow: Frame из grabber'а одноразовый
  * (он же буфер для следующего grab()), поэтому Mat и BufferedImage
  * получаем сразу в этом же цикле до следующего grab.
  */
@@ -34,6 +35,7 @@ class TrackingPipeline(
         grabber.start()
         val biConv = Java2DFrameConverter()
         val matConv = OpenCVFrameConverter.ToMat()
+        val tracker = FaceTracker()
         try {
             while (true) {
                 val frame = grabber.grab() ?: continue
@@ -46,7 +48,7 @@ class TrackingPipeline(
                         image = bi.toComposeImageBitmap(),
                         imageWidth = bi.width,
                         imageHeight = bi.height,
-                        faces = detection,
+                        faces = tracker.update(detection),
                     )
                 )
             }

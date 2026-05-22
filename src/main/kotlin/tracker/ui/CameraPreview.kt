@@ -27,17 +27,16 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
-import tracker.detect.FaceDetection
 
 @Composable
 fun CameraPreview(
     state: StateFlow<DetectedFrame?>,
-    selectedFace: StateFlow<FaceDetection?>,
-    onFaceSelected: (FaceDetection) -> Unit,
+    selectedFaceId: StateFlow<Int?>,
+    onFaceSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val frame by state.collectAsState()
-    val selected by selectedFace.collectAsState()
+    val selectedId by selectedFaceId.collectAsState()
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     val frameRef = rememberUpdatedState(frame)
 
@@ -55,11 +54,12 @@ fun CameraPreview(
                     val letterbox = computeLetterbox(w, h, f.imageWidth, f.imageHeight)
                     val imgX = (offset.x - letterbox.offsetX) / letterbox.scale
                     val imgY = (offset.y - letterbox.offsetY) / letterbox.scale
-                    val hit = f.faces.find { face ->
+                    val hit = f.faces.find { tf ->
+                        val face = tf.detection
                         imgX >= face.boxX && imgX <= face.boxX + face.boxW &&
                             imgY >= face.boxY && imgY <= face.boxY + face.boxH
                     }
-                    if (hit != null) onFaceSelected(hit)
+                    if (hit != null) onFaceSelected(hit.id)
                 }
             },
         contentAlignment = Alignment.Center,
@@ -75,7 +75,7 @@ fun CameraPreview(
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.Low,
             )
-            FaceOverlay(f, selected)
+            FaceOverlay(f, selectedId)
         }
     }
 }
@@ -102,7 +102,7 @@ private fun computeLetterbox(containerW: Float, containerH: Float, imageW: Int, 
 }
 
 @Composable
-private fun FaceOverlay(frame: DetectedFrame, selectedFace: FaceDetection?) {
+private fun FaceOverlay(frame: DetectedFrame, selectedId: Int?) {
     if (frame.faces.isEmpty()) return
     Canvas(modifier = Modifier.fillMaxSize()) {
         val lb = computeLetterbox(size.width, size.height, frame.imageWidth, frame.imageHeight)
@@ -110,8 +110,9 @@ private fun FaceOverlay(frame: DetectedFrame, selectedFace: FaceDetection?) {
         fun mapX(x: Float) = lb.offsetX + x * lb.scale
         fun mapY(y: Float) = lb.offsetY + y * lb.scale
 
-        frame.faces.forEach { face ->
-            val isTarget = face == selectedFace
+        frame.faces.forEach { tf ->
+            val face = tf.detection
+            val isTarget = tf.id == selectedId
             drawRect(
                 color = if (isTarget) Color.Cyan else Color.Green,
                 topLeft = Offset(mapX(face.boxX), mapY(face.boxY)),
