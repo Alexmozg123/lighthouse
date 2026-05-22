@@ -1,3 +1,12 @@
+/**
+ * EN: Application entry point. Wires together [TrackingPipeline], [SpotlightController], and
+ * [CameraPreview] inside a single Compose window. Lifecycle cleanup (detector + Art-Net client)
+ * is handled by [DisposableEffect] so native resources are freed when the window closes.
+ *
+ * RU: Точка входа приложения. Связывает [TrackingPipeline], [SpotlightController] и
+ * [CameraPreview] внутри одного Compose-окна. Освобождение нативных ресурсов (детектор +
+ * Art-Net клиент) выполняется в [DisposableEffect] при закрытии окна.
+ */
 package tracker
 
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +31,25 @@ import tracker.dmx.DmxFixture
 import tracker.dmx.SpotlightController
 import tracker.ui.CameraPreview
 
+/**
+ * EN: Compose application entry point. Creates the main window and bootstraps all subsystems:
+ * - [YuNetDetector] — face detection model (ONNX, native resources).
+ * - [TrackingPipeline] — continuous camera grab + detect + track flow on IO dispatcher.
+ * - [SpotlightController] — translates tracked face position to Art-Net DMX output.
+ * - [CameraPreview] — renders the live camera feed with face overlays; click to select target.
+ *
+ * The selected face ID is shared between the UI and the spotlight controller via
+ * [MutableStateFlow] to avoid locking.
+ *
+ * RU: Точка входа Compose-приложения. Создаёт главное окно и инициализирует все подсистемы:
+ * - [YuNetDetector] — модель детекции лиц (ONNX, нативные ресурсы).
+ * - [TrackingPipeline] — непрерывный захват + детекция + трекинг на IO-диспетчере.
+ * - [SpotlightController] — переводит позицию выбранного лица в DMX-вывод через Art-Net.
+ * - [CameraPreview] — отображает живое видео с оверлеями лиц; клик выбирает цель.
+ *
+ * ID выбранного лица передаётся между UI и контроллером через [MutableStateFlow],
+ * чтобы избежать явных блокировок.
+ */
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,

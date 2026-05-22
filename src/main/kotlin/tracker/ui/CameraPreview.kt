@@ -28,6 +28,30 @@ import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
 
+/**
+ * EN: Root camera preview composable. Displays the live camera feed scaled to the container
+ * with `ContentScale.Fit` (letterboxing), and draws [FaceOverlay] on top.
+ *
+ * Tap/click handling: tap coordinates on the canvas are converted back to image-space
+ * coordinates using [computeLetterbox], then compared against each face's bounding box.
+ * The first face whose bbox contains the tap point triggers [onFaceSelected].
+ *
+ * Shows "Ожидание камеры…" while [state] is null (camera not yet open).
+ *
+ * RU: Корневой компосабл превью камеры. Отображает живое видео, масштабированное в контейнер
+ * через `ContentScale.Fit` (letterboxing), и рисует [FaceOverlay] поверх.
+ *
+ * Обработка тапов: координаты тапа на канвасе переводятся обратно в координаты изображения
+ * через [computeLetterbox], затем сравниваются с bbox каждого лица. Первое лицо, bbox
+ * которого содержит точку тапа, вызывает [onFaceSelected].
+ *
+ * Пока [state] == null (камера ещё не открыта) отображает «Ожидание камеры…».
+ *
+ * @param state          flow of camera frames / поток кадров камеры
+ * @param selectedFaceId flow of currently selected face ID / поток ID выбранного лица
+ * @param onFaceSelected callback invoked when the user taps a face / колбэк при нажатии на лицо
+ * @param modifier       modifier applied to the outer Box / модификатор внешнего Box
+ */
 @Composable
 fun CameraPreview(
     state: StateFlow<DetectedFrame?>,
@@ -80,8 +104,25 @@ fun CameraPreview(
     }
 }
 
+/**
+ * EN: Holds the geometric parameters of a `ContentScale.Fit` letterbox transform:
+ * the x/y offset of the image within the container, and the uniform scale factor.
+ * Used for both rendering (forward transform) and tap hit-testing (inverse transform).
+ *
+ * RU: Параметры letterbox-трансформации `ContentScale.Fit`:
+ * смещение изображения внутри контейнера по x/y и единый коэффициент масштаба.
+ * Используется как для рендеринга (прямое преобразование), так и для
+ * hit-тестирования тапов (обратное преобразование).
+ */
 private data class Letterbox(val offsetX: Float, val offsetY: Float, val scale: Float)
 
+/**
+ * EN: Computes the [Letterbox] parameters that `ContentScale.Fit` would produce when
+ * fitting an image of [imageW]×[imageH] into a container of [containerW]×[containerH].
+ *
+ * RU: Вычисляет параметры [Letterbox], которые `ContentScale.Fit` создаёт при
+ * вписывании изображения [imageW]×[imageH] в контейнер [containerW]×[containerH].
+ */
 private fun computeLetterbox(containerW: Float, containerH: Float, imageW: Int, imageH: Int): Letterbox {
     val imageAspect = imageW.toFloat() / imageH.toFloat()
     val containerAspect = containerW / containerH
@@ -101,6 +142,20 @@ private fun computeLetterbox(containerW: Float, containerH: Float, imageW: Int, 
     )
 }
 
+/**
+ * EN: Canvas composable drawn on top of the camera image. Renders one bounding-box rectangle
+ * per tracked face. The selected face is highlighted in **cyan** (4 px stroke);
+ * all other faces are drawn in **green** (2 px stroke). Keypoints are not drawn here;
+ * they can be added later without changing the hit-test logic in [CameraPreview].
+ *
+ * RU: Canvas-компосабл, рисуемый поверх изображения камеры. Отрисовывает один
+ * ограничивающий прямоугольник на каждое отслеживаемое лицо. Выбранное лицо выделяется
+ * **голубым** (обводка 4 px); все остальные — **зелёным** (обводка 2 px). Ключевые точки
+ * здесь не рисуются; их можно добавить позже без изменения логики hit-теста в [CameraPreview].
+ *
+ * @param frame      current tracking snapshot / текущий снимок трекинга
+ * @param selectedId ID of the face to highlight / ID лица для выделения
+ */
 @Composable
 private fun FaceOverlay(frame: DetectedFrame, selectedId: Int?) {
     if (frame.faces.isEmpty()) return

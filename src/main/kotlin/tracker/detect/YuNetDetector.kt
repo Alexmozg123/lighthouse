@@ -10,12 +10,36 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.deleteIfExists
 
 /**
- * YuNet face detector via JavaCV (org.bytedeco.opencv.opencv_objdetect.FaceDetectorYN).
- * Модель ожидается в ресурсах: src/main/resources/models/face_detection_yunet_2023mar.onnx
+ * EN: YuNet face detector wrapping `org.bytedeco.opencv.opencv_objdetect.FaceDetectorYN`
+ * via JavaCV 1.5.10.
  *
- * detect() и close() синхронизированы через lock: закрытие окна вызывает close() на
- * главном потоке пока IO-поток может быть внутри нативного FaceDetectorYN.detect(),
- * что приводит к SIGSEGV (use-after-free в libopencv_dnn).
+ * The ONNX model is expected at `src/main/resources/models/face_detection_yunet_2023mar.onnx`.
+ * On construction it is extracted to a temp file because the native ONNX Runtime requires a
+ * real filesystem path, not a classpath resource stream.
+ *
+ * Thread safety: [detect] and [close] are both `synchronized` on a shared lock.
+ * Without this guard, closing the window calls [close] on the main thread while the IO thread
+ * may still be inside the native `FaceDetectorYN.detect()`, causing a use-after-free SIGSEGV
+ * in `libopencv_dnn`. The `@Volatile closed` flag prevents a second entry into the lock
+ * after the detector is already destroyed.
+ *
+ * RU: Детектор лиц YuNet, обёртывающий `org.bytedeco.opencv.opencv_objdetect.FaceDetectorYN`
+ * через JavaCV 1.5.10.
+ *
+ * ONNX-модель ожидается по пути `src/main/resources/models/face_detection_yunet_2023mar.onnx`.
+ * При создании копируется во временный файл, так как нативный ONNX Runtime требует
+ * реальный путь на диске, а не поток из classpath.
+ *
+ * Потокобезопасность: [detect] и [close] синхронизированы через общий лок.
+ * Без этого закрытие окна вызывает [close] на главном потоке, пока IO-поток может
+ * находиться внутри нативного `FaceDetectorYN.detect()`, что приводит к SIGSEGV
+ * (use-after-free в `libopencv_dnn`). Флаг `@Volatile closed` предотвращает повторный
+ * вход в лок после того, как детектор уже уничтожен.
+ *
+ * @param modelResourcePath classpath path to the ONNX model / путь к ONNX-модели в classpath
+ * @param scoreThreshold    minimum detection confidence / минимальная уверенность детекции
+ * @param nmsThreshold      NMS IoU threshold / порог IoU для NMS
+ * @param topK              maximum detections before NMS / максимум детекций до NMS
  */
 class YuNetDetector(
     modelResourcePath: String = "/models/face_detection_yunet_2023mar.onnx",
@@ -38,6 +62,18 @@ class YuNetDetector(
     private val lock = Any()
     @Volatile private var closed = false
 
+    /**
+     * EN: Runs YuNet inference on [frame] and returns all detected faces.
+     * Returns an empty list if the detector has been closed or the frame is empty.
+     * Safe to call concurrently with [close].
+     *
+     * RU: Запускает инференс YuNet на [frame] и возвращает все обнаруженные лица.
+     * Возвращает пустой список, если детектор закрыт или кадр пустой.
+     * Безопасно вызывать одновременно с [close].
+     *
+     * @param frame OpenCV Mat in BGR format / кадр в формате BGR OpenCV
+     * @return detected faces in frame-pixel coordinates / обнаруженные лица в пикселях кадра
+     */
     fun detect(frame: Mat): List<FaceDetection> {
         if (closed || frame.empty()) return emptyList()
         return synchronized(lock) {
@@ -73,6 +109,13 @@ class YuNetDetector(
         }
     }
 
+    /**
+     * EN: Releases the native [FaceDetectorYN] and deletes the temp ONNX model file.
+     * Idempotent. Safe to call concurrently with [detect].
+     *
+     * RU: Освобождает нативный [FaceDetectorYN] и удаляет временный файл ONNX-модели.
+     * Идемпотентен. Безопасно вызывать одновременно с [detect].
+     */
     override fun close() {
         synchronized(lock) {
             if (closed) return

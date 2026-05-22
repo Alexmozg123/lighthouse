@@ -4,14 +4,33 @@ import ch.bildspur.artnet.ArtNetClient
 import tracker.app.DetectedFrame
 
 /**
- * Связывает трекер лиц с набором DMX-голов через Art-Net.
+ * EN: Bridges the face tracker with a set of DMX moving heads over Art-Net.
  *
- * Каждая [DmxFixture] — отдельная голова с собственным universe/host.
- * Сейчас все головы отслеживают одно выбранное лицо; в будущем каждой
- * можно назначить свой targetFaceId.
+ * Each [DmxFixture] represents one physical (or virtual) head with its own
+ * Art-Net host/subnet/universe. Currently all fixtures track the same selected face;
+ * per-fixture target assignment is a planned future feature.
  *
- * Маппинг координат: центр bbox нормализуется в [0,1] → pan/tilt.
- * Если выбранное лицо не найдено — dimmer = 0 (блэкаут), позиция держится.
+ * Coordinate mapping: the bounding-box centre is normalised to [0, 1] and mapped
+ * directly to pan/tilt. If the selected face is absent from the frame, the dimmer is
+ * set to 0 (blackout) while the last pan/tilt position is preserved.
+ *
+ * One `unicastDmx` packet is sent per fixture on every call to [update], regardless
+ * of whether the position changed.
+ *
+ * RU: Связывает трекер лиц с набором DMX-голов через Art-Net.
+ *
+ * Каждая [DmxFixture] представляет одну физическую (или виртуальную) голову
+ * со своим Art-Net host/subnet/universe. Сейчас все головы отслеживают одно выбранное
+ * лицо; назначение отдельных целей каждой голове — запланированная функция.
+ *
+ * Маппинг координат: центр bbox нормализуется в [0, 1] и напрямую отображается
+ * на pan/tilt. Если выбранное лицо отсутствует в кадре, диммер обнуляется (блэкаут),
+ * а последняя позиция pan/tilt сохраняется.
+ *
+ * На каждый вызов [update] отправляется один `unicastDmx`-пакет на фикстуру,
+ * независимо от того, изменилась ли позиция.
+ *
+ * @param fixtures list of DMX fixtures to drive / список DMX-фикстур для управления
  */
 class SpotlightController(
     private val fixtures: List<DmxFixture>,
@@ -19,6 +38,19 @@ class SpotlightController(
 
     private val artnet = ArtNetClient().also { it.start() }
 
+    /**
+     * EN: Processes one [DetectedFrame] and sends an Art-Net packet to every fixture.
+     * Must be called from a background thread (IO dispatcher); [ArtNetClient.unicastDmx]
+     * performs a blocking UDP send.
+     *
+     * RU: Обрабатывает один [DetectedFrame] и отправляет Art-Net пакет каждой фикстуре.
+     * Должен вызываться из фонового потока (IO-диспетчер); [ArtNetClient.unicastDmx]
+     * выполняет блокирующую UDP-отправку.
+     *
+     * @param frame      current tracking frame / текущий кадр трекинга
+     * @param selectedId ID of the face to follow, or null to blackout /
+     *                   ID лица для отслеживания, или null для блэкаута
+     */
     fun update(frame: DetectedFrame, selectedId: Int?) {
         fixtures.forEach { fixture ->
             val face = frame.faces.find { it.id == selectedId }
