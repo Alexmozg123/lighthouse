@@ -2,6 +2,7 @@ package tracker.dmx
 
 import ch.bildspur.artnet.ArtNetClient
 import tracker.app.DetectedFrame
+import tracker.calibration.HomographyMapper
 
 /**
  * EN: Bridges the face tracker with a set of DMX moving heads over Art-Net.
@@ -31,9 +32,12 @@ import tracker.app.DetectedFrame
  * независимо от того, изменилась ли позиция.
  *
  * @param fixtures list of DMX fixtures to drive / список DMX-фикстур для управления
+ * @param mapper   optional homography-based coordinate mapper; null falls back to linear /
+ *                 опциональный гомографический маппер координат; null — линейный fallback
  */
 class SpotlightController(
     private val fixtures: List<DmxFixture>,
+    private val mapper: HomographyMapper? = null,
 ) : AutoCloseable {
 
     private val artnet = ArtNetClient().also { it.start() }
@@ -55,9 +59,11 @@ class SpotlightController(
         fixtures.forEach { fixture ->
             val face = frame.faces.find { it.id == selectedId }
             if (face != null) {
-                val cx = (face.detection.boxX + face.detection.boxW / 2f) / frame.imageWidth
-                val cy = (face.detection.boxY + face.detection.boxH / 2f) / frame.imageHeight
-                fixture.setPanTilt(cx, cy, dimmer = 1f)
+                val faceCx = face.detection.boxX + face.detection.boxW / 2f
+                val faceCy = face.detection.boxY + face.detection.boxH / 2f
+                val (pan, tilt) = mapper?.map(faceCx, faceCy)
+                    ?: (faceCx / frame.imageWidth to faceCy / frame.imageHeight)
+                fixture.setPanTilt(pan, tilt, dimmer = 1f)
             } else {
                 fixture.setDimmer(0f)
             }

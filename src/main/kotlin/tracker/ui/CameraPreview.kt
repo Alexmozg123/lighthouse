@@ -50,6 +50,10 @@ import tracker.app.DetectedFrame
  * @param state          flow of camera frames / поток кадров камеры
  * @param selectedFaceId flow of currently selected face ID / поток ID выбранного лица
  * @param onFaceSelected callback invoked when the user taps a face / колбэк при нажатии на лицо
+ * @param onRawClick     optional callback with raw image-space coordinates (x, y) for every tap,
+ *                       regardless of whether a face was hit; used by the calibration wizard /
+ *                       опциональный колбэк с координатами в пространстве изображения для каждого
+ *                       тапа, независимо от попадания в лицо; используется визардом калибровки
  * @param modifier       modifier applied to the outer Box / модификатор внешнего Box
  */
 @Composable
@@ -57,6 +61,7 @@ fun CameraPreview(
     state: StateFlow<DetectedFrame?>,
     selectedFaceId: StateFlow<Int?>,
     onFaceSelected: (Int) -> Unit,
+    onRawClick: ((x: Float, y: Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val frame by state.collectAsState()
@@ -78,6 +83,7 @@ fun CameraPreview(
                     val letterbox = computeLetterbox(w, h, f.imageWidth, f.imageHeight)
                     val imgX = (offset.x - letterbox.offsetX) / letterbox.scale
                     val imgY = (offset.y - letterbox.offsetY) / letterbox.scale
+                    onRawClick?.invoke(imgX, imgY)
                     val hit = f.faces.find { tf ->
                         val face = tf.detection
                         imgX >= face.boxX && imgX <= face.boxX + face.boxW &&
@@ -114,7 +120,7 @@ fun CameraPreview(
  * Используется как для рендеринга (прямое преобразование), так и для
  * hit-тестирования тапов (обратное преобразование).
  */
-private data class Letterbox(val offsetX: Float, val offsetY: Float, val scale: Float)
+internal data class Letterbox(val offsetX: Float, val offsetY: Float, val scale: Float)
 
 /**
  * EN: Computes the [Letterbox] parameters that `ContentScale.Fit` would produce when
@@ -123,7 +129,7 @@ private data class Letterbox(val offsetX: Float, val offsetY: Float, val scale: 
  * RU: Вычисляет параметры [Letterbox], которые `ContentScale.Fit` создаёт при
  * вписывании изображения [imageW]×[imageH] в контейнер [containerW]×[containerH].
  */
-private fun computeLetterbox(containerW: Float, containerH: Float, imageW: Int, imageH: Int): Letterbox {
+internal fun computeLetterbox(containerW: Float, containerH: Float, imageW: Int, imageH: Int): Letterbox {
     val imageAspect = imageW.toFloat() / imageH.toFloat()
     val containerAspect = containerW / containerH
     val drawWidth: Float

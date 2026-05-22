@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Lighthouse — face-tracking → DMX moving head
 
-Kotlin/JVM desktop-приложение: веб-камера → детекция лица → выбор точки интереса → DMX (Art-Net) на световую голову, чтобы луч следил за выбранной точкой. Сейчас в разработке; физической головы нет, отладка через виртуальный Art-Net приёмник (QLC+).
+Kotlin/JVM desktop-приложение: веб-камера → детекция лица → выбор точки интереса → DMX (Art-Net) на световую голову, чтобы луч следил за выбранной точкой. Физическая голова есть; отладка также возможна через виртуальный Art-Net приёмник (QLC+).
 
 ## Стек
 
@@ -43,12 +43,21 @@ CameraSource          — конфигурирует FrameGrabber (1280×720 @ 3
 
 ```
 src/main/kotlin/tracker/
-    Main.kt                       # Compose entry, поднимает TrackingPipeline
-    capture/CameraSource.kt       # фабрика FrameGrabber'а
-    detect/FaceDetection.kt       # DTO: bbox + 5 keypoints в координатах кадра
-    detect/YuNetDetector.kt       # YuNet через JavaCV (FaceDetectorYN)
-    app/TrackingPipeline.kt       # единый Flow<DetectedFrame>: capture → detect → emit
-    ui/CameraPreview.kt           # Image + Canvas-оверлей (bbox + keypoints)
+    Main.kt                            # Compose entry, стартовый экран сцен → трекинг
+    capture/CameraSource.kt            # фабрика FrameGrabber'а
+    detect/FaceDetection.kt            # DTO: bbox + 5 keypoints в координатах кадра
+    detect/FaceTracker.kt              # стабильные ID (IoU фаза1 + centroid фаза2)
+    detect/TrackedFace.kt              # пара id + FaceDetection
+    detect/YuNetDetector.kt            # YuNet через JavaCV (FaceDetectorYN)
+    app/TrackingPipeline.kt            # единый Flow<DetectedFrame>: capture → detect → emit
+    scene/SceneData.kt                 # @Serializable: SceneData, FixtureConfig, CalibrationData, CalibrationPoint
+    scene/SceneStore.kt                # read/write ~/.lighthouse/scenes/*.json
+    calibration/HomographyMapper.kt    # findHomography + map(px,py)→(pan,tilt)
+    dmx/DmxFixture.kt                  # 16-bit pan/tilt DMX буфер
+    dmx/SpotlightController.kt         # Art-Net отправка, HomographyMapper или linear fallback
+    ui/CameraPreview.kt                # Image + Canvas-оверлей; onRawClick для калибровки
+    ui/SceneManagerScreen.kt           # стартовый список сцен: загрузить / создать
+    ui/SceneEditorScreen.kt            # редактор сцены + 4-точечный калибровочный визард
 src/main/resources/models/
     face_detection_yunet_2023mar.onnx
 ```
@@ -79,6 +88,8 @@ src/main/resources/models/
 - **Gradle 9 + foojay-resolver 0.8.0** падает с `IBM_SEMERU`. Использовать 0.10.0+ или ставить JDK руками.
 - **`FaceDetectorYN.create` в JavaCV 1.5.10** требует 8 аргументов (добавили `backend_id`, `target_id`), а не 6 как в других обёртках.
 - **SIGSEGV при закрытии окна (exit 134)**: `DisposableEffect.onDispose` вызывает `detector.close()` на главном потоке, пока IO-поток ещё внутри нативного `FaceDetectorYN.detect()` — use-after-free в `libopencv_dnn`. Решено: `detect()` и `close()` в `YuNetDetector` обёрнуты в `synchronized(lock)` с `@Volatile closed` флагом.
+- **`findHomography` возвращает пустой Mat на вырожденных точках**: если 4 точки коллинеарны или все destination (pan/tilt) одинаковы — `createIndexer()` падает с NPE (`ptr is null`). Решено: `check(!H.isNull && !H.empty())` в `HomographyMapper.init`; `runCatching` в `Main.kt` при создании маппера; валидация дубликатов и пробный `HomographyMapper` перед сохранением в `SceneEditorScreen`.
+- **`derivedStateOf` не подходит для ресурсов с lifecycle**: `SpotlightController` (держит `ArtNetClient`) создавался в `derivedStateOf` — при исключении внутри него падал весь AWT-поток. Заменено на `DisposableEffect(activeScene)` с явным `close()` в `onDispose`.
 
 ## Документация в коде
 
@@ -107,9 +118,5 @@ src/main/resources/models/
 
 ## Что не сделано
 
-- UI выбора POI: клик по лицу в превью → это лицо становится целью прожектора.
-- Face tracking: назначение стабильных ID лицам между кадрами (IoU/ближайший центроид), чтобы выбор не терялся при кратковременном пропадании.
-- Art-Net sender + `DmxFixture` (каналы pan/tilt/dimmer).
-- Калибровка камера→pan/tilt (4-точечная homography через `Imgproc.findHomography`).
 - One-Euro filter сглаживания движения выбранного лица.
-- Edge cases: лицо пропало (hold-last → blackout), потеря камеры.
+- Edge cases: лицо пропало (сейчас blackout; hold-last — в планах), потеря камеры.

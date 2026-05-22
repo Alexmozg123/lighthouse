@@ -1,21 +1,26 @@
 /**
  * EN: Application entry point. Wires together [TrackingPipeline], [SpotlightController], and
- * [CameraPreview] inside a single Compose window. Lifecycle cleanup (detector + Art-Net client)
- * is handled by [DisposableEffect] so native resources are freed when the window closes.
+ * [CameraPreview] inside a single Compose window. Shows [SceneManagerScreen] on startup so
+ * the user can load or create a scene before tracking begins.
+ *
+ * The [HomographyMapper] is (re)created whenever a new scene is loaded. If the scene has no
+ * calibration data, [SpotlightController] falls back to linear pixel→pan/tilt mapping.
  *
  * RU: Точка входа приложения. Связывает [TrackingPipeline], [SpotlightController] и
- * [CameraPreview] внутри одного Compose-окна. Освобождение нативных ресурсов (детектор +
- * Art-Net клиент) выполняется в [DisposableEffect] при закрытии окна.
+ * [CameraPreview] внутри одного Compose-окна. При запуске показывает [SceneManagerScreen],
+ * чтобы пользователь мог загрузить или создать сцену до начала трекинга.
+ *
+ * [HomographyMapper] пересоздаётся при каждой загрузке новой сцены. Если у сцены нет
+ * данных калибровки, [SpotlightController] использует линейный маппинг пиксель→pan/tilt.
  */
 package tracker
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -25,73 +30,131 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
 import tracker.app.DetectedFrame
 import tracker.app.TrackingPipeline
+import tracker.calibration.HomographyMapper
 import tracker.capture.CameraSource
 import tracker.detect.YuNetDetector
 import tracker.dmx.DmxFixture
 import tracker.dmx.SpotlightController
+import tracker.scene.SceneData
 import tracker.ui.CameraPreview
+import tracker.ui.SceneEditorScreen
+import tracker.ui.SceneManagerScreen
 
-/**
- * EN: Compose application entry point. Creates the main window and bootstraps all subsystems:
- * - [YuNetDetector] — face detection model (ONNX, native resources).
- * - [TrackingPipeline] — continuous camera grab + detect + track flow on IO dispatcher.
- * - [SpotlightController] — translates tracked face position to Art-Net DMX output.
- * - [CameraPreview] — renders the live camera feed with face overlays; click to select target.
- *
- * The selected face ID is shared between the UI and the spotlight controller via
- * [MutableStateFlow] to avoid locking.
- *
- * RU: Точка входа Compose-приложения. Создаёт главное окно и инициализирует все подсистемы:
- * - [YuNetDetector] — модель детекции лиц (ONNX, нативные ресурсы).
- * - [TrackingPipeline] — непрерывный захват + детекция + трекинг на IO-диспетчере.
- * - [SpotlightController] — переводит позицию выбранного лица в DMX-вывод через Art-Net.
- * - [CameraPreview] — отображает живое видео с оверлеями лиц; клик выбирает цель.
- *
- * ID выбранного лица передаётся между UI и контроллером через [MutableStateFlow],
- * чтобы избежать явных блокировок.
- */
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
         title = "Lighthouse — face → DMX",
-        state = rememberWindowState(width = 1280.dp, height = 720.dp),
+        state = rememberWindowState(width = 1280.dp, height = 800.dp),
     ) {
         val frameFlow = remember { MutableStateFlow<DetectedFrame?>(null) }
         val selectedIdFlow = remember { MutableStateFlow<Int?>(null) }
         val detector = remember { YuNetDetector() }
         val pipeline = remember { TrackingPipeline(CameraSource(deviceIndex = 0), detector) }
-        val spotlight = remember {
-            SpotlightController(
-                fixtures = listOf(
-                    DmxFixture(host = "127.0.0.1", subnet = 0, universe = 0, startChannel = 1),
-                ),
-            )
+
+        var activeScene by remember { mutableStateOf<SceneData?>(null) }
+        var showSceneManager by remember { mutableStateOf(true) }
+        var showSceneEditor by remember { mutableStateOf(false) }
+
+        // SpotlightController holds an ArtNetClient — recreate and close it when the scene changes.
+        var spotlight by remember { mutableStateOf<SpotlightController?>(null) }
+        // true = homography active, false = fell back to linear (bad calibration), null = no scene
+        var calibrationActive by remember { mutableStateOf<Boolean?>(null) }
+        DisposableEffect(activeScene) {
+            val scene = activeScene
+            val controller = if (scene != null) {
+                var mapperOk = false
+                val mapper = scene.calibration?.let { cal ->
+                    runCatching { HomographyMapper(cal) }.getOrElse { null }
+                        ?.also { mapperOk = true }
+                }
+                calibrationActive = if (scene.calibration != null) mapperOk else null
+                SpotlightController(
+                    fixtures = scene.fixtures.map { DmxFixture(it.host, it.subnet, it.universe, it.startChannel) },
+                    mapper = mapper,
+                )
+            } else { calibrationActive = null; null }
+            spotlight = controller
+            onDispose { controller?.close() }
         }
 
         DisposableEffect(Unit) {
-            onDispose {
-                detector.close()
-                spotlight.close()
-            }
+            onDispose { detector.close() }
         }
+
         LaunchedEffect(Unit) {
             pipeline.frames().collect { frame ->
                 frameFlow.value = frame
+                val sp = spotlight ?: return@collect
                 val selectedId = selectedIdFlow.value
-                withContext(Dispatchers.IO) {
-                    spotlight.update(frame, selectedId)
-                }
+                withContext(Dispatchers.IO) { sp.update(frame, selectedId) }
             }
         }
 
         MaterialTheme {
             Surface(modifier = Modifier.fillMaxSize()) {
-                CameraPreview(
-                    state = frameFlow,
-                    selectedFaceId = selectedIdFlow,
-                    onFaceSelected = { selectedIdFlow.value = it },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                when {
+                    showSceneManager -> SceneManagerScreen(
+                        frameFlow = frameFlow,
+                        onSceneSelected = { scene: SceneData ->
+                            activeScene = scene
+                            showSceneManager = false
+                        },
+                    )
+                    showSceneEditor -> SceneEditorScreen(
+                        initial = activeScene,
+                        frameFlow = frameFlow,
+                        onSaved = { scene: SceneData ->
+                            activeScene = scene
+                            showSceneEditor = false
+                        },
+                        onCancelled = { showSceneEditor = false },
+                    )
+                    else -> Box(modifier = Modifier.fillMaxSize()) {
+                        CameraPreview(
+                            state = frameFlow,
+                            selectedFaceId = selectedIdFlow,
+                            onFaceSelected = { selectedIdFlow.value = it },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        // Floating toolbar: scene name + calibration badge + navigation
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            activeScene?.let {
+                                Text(
+                                    it.name,
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    style = MaterialTheme.typography.caption,
+                                )
+                            }
+                            when (calibrationActive) {
+                                true -> Text(
+                                    "✓ Калибровка",
+                                    color = Color(0xFF81C784),
+                                    style = MaterialTheme.typography.caption,
+                                )
+                                false -> Text(
+                                    "⚠ Линейный режим",
+                                    color = Color(0xFFFFB74D),
+                                    style = MaterialTheme.typography.caption,
+                                )
+                                null -> {}
+                            }
+                            Button(
+                                onClick = { showSceneEditor = true },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            ) { Text("Изменить") }
+                            Button(
+                                onClick = { showSceneManager = true },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            ) { Text("Сцены") }
+                        }
+                    }
+                }
             }
         }
     }
