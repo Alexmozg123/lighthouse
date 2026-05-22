@@ -3,10 +3,12 @@ kotlin = "2.0.20"
 compose = "1.7.0"
 coroutines = "1.8.1"
 javacv = "1.5.10"
+artnet4j = "0.6.2"
 
 [libraries]
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 javacv-platform = { module = "org.bytedeco:javacv-platform", version.ref = "javacv" }
+artnet4j = { module = "ch.bildspur:artnet4j", version.ref = "artnet4j" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
