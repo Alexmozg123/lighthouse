@@ -63,6 +63,7 @@ fun main() {
                             initial = screen.scene,
                             frameFlow = viewModel.frameFlow,
                             validateCalibration = { viewModel.validateCalibration(it) },
+                            isDuplicatePanTilt = { pts, pan, tilt -> viewModel.isDuplicatePanTilt(pts, pan, tilt) },
                             onSaved = { viewModel.onSceneSaved(it) },
                             onCancelled = { viewModel.navigateBack() },
                         )

@@ -176,6 +176,20 @@ class AppViewModel(
         CalibrationUseCase.buildMapper(points, mapperFactory).map { }
 
     /**
+     * EN: Returns true if [pan]/[tilt] already appear in [existing].
+     * Delegates to [CalibrationUseCase] so the UI layer does not import domain use cases directly.
+     *
+     * RU: Возвращает true, если [pan]/[tilt] уже есть в [existing].
+     * Делегирует [CalibrationUseCase], чтобы UI не импортировал use cases напрямую.
+     *
+     * @param existing confirmed calibration points so far / уже подтверждённые точки калибровки
+     * @param pan      candidate pan value / кандидат pan
+     * @param tilt     candidate tilt value / кандидат tilt
+     */
+    fun isDuplicatePanTilt(existing: List<CalibrationPoint>, pan: Float, tilt: Float): Boolean =
+        CalibrationUseCase.isDuplicatePanTilt(existing, pan, tilt)
+
+    /**
      * EN: Navigates to the scene list screen.
      * RU: Переходит на экран списка сцен.
      */

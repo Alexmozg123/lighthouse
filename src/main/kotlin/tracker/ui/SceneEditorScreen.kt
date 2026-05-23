@@ -25,7 +25,6 @@ import tracker.domain.entity.CalibrationData
 import tracker.domain.entity.CalibrationPoint
 import tracker.domain.entity.FixtureConfig
 import tracker.domain.entity.SceneData
-import tracker.domain.usecase.CalibrationUseCase
 
 /**
  * EN: Composable for creating or editing a [SceneData].
@@ -58,6 +57,8 @@ import tracker.domain.usecase.CalibrationUseCase
  *                             живые кадры камеры для превью калибровки
  * @param validateCalibration  validates 4 points before saving; returns failure with a message on bad geometry /
  *                             валидирует 4 точки перед сохранением; возвращает failure с сообщением при плохой геометрии
+ * @param isDuplicatePanTilt   returns true if pan/tilt already exist in the confirmed list /
+ *                             возвращает true если pan/tilt уже есть в подтверждённых точках
  * @param onSaved              called with the final [SceneData] / вызывается с итоговой [SceneData]
  * @param onCancelled          called when the user discards changes / вызывается при отмене
  */
@@ -66,6 +67,7 @@ fun SceneEditorScreen(
     initial: SceneData?,
     frameFlow: StateFlow<DetectedFrame?>,
     validateCalibration: (List<CalibrationPoint>) -> Result<Unit>,
+    isDuplicatePanTilt: (List<CalibrationPoint>, Float, Float) -> Boolean,
     onSaved: (SceneData) -> Unit,
     onCancelled: () -> Unit,
 ) {
@@ -178,7 +180,7 @@ fun SceneEditorScreen(
                         val pan = pendingPan.toFloatOrNull()?.coerceIn(0f, 1f)
                         val tilt = pendingTilt.toFloatOrNull()?.coerceIn(0f, 1f)
                         val isDuplicate = pan != null && tilt != null &&
-                            CalibrationUseCase.isDuplicatePanTilt(calibPoints, pan, tilt)
+                            isDuplicatePanTilt(calibPoints, pan, tilt)
                         if (isDuplicate) {
                             Text(
                                 "Такие pan/tilt уже есть в списке — у каждой точки должны быть разные значения.",
