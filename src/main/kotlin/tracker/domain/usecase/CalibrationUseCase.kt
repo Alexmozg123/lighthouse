@@ -1,6 +1,5 @@
 package tracker.domain.usecase
 
-import tracker.adapter.calibration.HomographyMapper
 import tracker.domain.entity.CalibrationData
 import tracker.domain.entity.CalibrationPoint
 
@@ -11,10 +10,8 @@ import tracker.domain.entity.CalibrationPoint
  * 1. Each confirmed point must have a unique pan/tilt pair.
  * 2. The four points must form a non-degenerate projective mapping.
  *
- * [buildMapper] performs a single OpenCV call that both validates the geometry and
- * produces the ready-to-use mapper — avoiding a double construction.
- * The return type is [PositionMapper] so callers depend only on the domain interface,
- * not on the concrete adapter implementation.
+ * [buildMapper] delegates geometry validation and construction to [MapperFactory],
+ * keeping this object free of any adapter dependency.
  *
  * RU: Доменные правила для 4-точечного процесса калибровки камера→pan/tilt.
  *
@@ -22,9 +19,8 @@ import tracker.domain.entity.CalibrationPoint
  * 1. Каждая точка должна иметь уникальную пару pan/tilt.
  * 2. Четыре точки должны образовывать невырожденное проективное отображение.
  *
- * [buildMapper] выполняет единственный вызов OpenCV, одновременно валидируя геометрию
- * и создавая готовый маппер. Тип возврата — [PositionMapper], чтобы вызывающий код
- * зависел только от доменного интерфейса, а не от конкретной реализации адаптера.
+ * [buildMapper] делегирует валидацию геометрии и построение маппера [MapperFactory],
+ * не привнося в этот объект никаких зависимостей на adapter.
  */
 object CalibrationUseCase {
 
@@ -40,18 +36,19 @@ object CalibrationUseCase {
         existing.any { it.pan == pan && it.tilt == tilt }
 
     /**
-     * EN: Validates [points] (exactly 4) and constructs a [PositionMapper].
-     * Returns [Result.failure] when the geometry is degenerate (collinear points, duplicates, etc.).
+     * EN: Validates [points] (exactly 4) and constructs a [PositionMapper] via [factory].
+     * Returns [Result.failure] when the geometry is degenerate (collinear points, etc.).
      *
-     * RU: Валидирует [points] (ровно 4) и создаёт [PositionMapper].
-     * Возвращает [Result.failure] при вырожденной геометрии (коллинеарные точки, дубликаты и т. д.).
+     * RU: Валидирует [points] (ровно 4) и создаёт [PositionMapper] через [factory].
+     * Возвращает [Result.failure] при вырожденной геометрии (коллинеарные точки и т. д.).
      *
-     * @param points exactly 4 calibration correspondences / ровно 4 соответствия калибровки
+     * @param points  exactly 4 calibration correspondences / ровно 4 соответствия калибровки
+     * @param factory mapper constructor provided by the adapter layer / конструктор маппера из слоя adapter
      * @return [Result] with mapper on success, or wrapped exception on failure /
      *         [Result] с маппером при успехе или обёрнутым исключением при ошибке
      */
-    fun buildMapper(points: List<CalibrationPoint>): Result<PositionMapper> {
+    fun buildMapper(points: List<CalibrationPoint>, factory: MapperFactory): Result<PositionMapper> {
         require(points.size == 4) { "Exactly 4 calibration points required, got ${points.size}" }
-        return runCatching { HomographyMapper(CalibrationData(points)) }
+        return factory.create(CalibrationData(points))
     }
 }

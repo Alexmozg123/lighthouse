@@ -1,6 +1,6 @@
 package tracker.app
 
-import tracker.adapter.dmx.ArtNetSender
+import tracker.domain.usecase.DmxSender
 import tracker.domain.usecase.PositionMapper
 
 /**
@@ -16,12 +16,12 @@ import tracker.domain.usecase.PositionMapper
  * Находится в app-слое, поскольку координирует доменную логику ([FacePositionResolver])
  * с инфраструктурой ([ArtNetSender]); адаптеры не должны выполнять такую оркестрацию.
  *
- * @param sender Art-Net transport layer / слой Art-Net транспорта
+ * @param sender DMX transport; any [DmxSender] implementation / DMX-транспорт; любая реализация [DmxSender]
  * @param mapper optional position mapper; null = linear fallback /
  *               опциональный маппер; null — линейный fallback
  */
 class SpotlightController(
-    private val sender: ArtNetSender,
+    private val sender: DmxSender,
     private val mapper: PositionMapper? = null,
 ) : AutoCloseable {
 

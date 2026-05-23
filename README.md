@@ -100,7 +100,8 @@ src/main/kotlin/tracker/
     domain/
         entity/                      — FaceDetection, TrackedFace, SceneData,
                                        DmxFixture, PanTilt, CalibrationData, …
-        usecase/                     — FaceTracker, CalibrationUseCase, PositionMapper
+        usecase/                     — FaceTracker, CalibrationUseCase, PositionMapper,
+                                       MapperFactory, DmxSender, DmxSenderFactory
         repository/SceneRepository.kt— интерфейс персистентности сцен
     adapter/
         camera/                      — CameraSource, YuNetDetector
@@ -112,7 +113,7 @@ src/main/kotlin/tracker/
         AppViewModel.kt              — навигация, scenes StateFlow, spotlight lifecycle
         TrackingPipeline.kt          — Flow<DetectedFrame>: capture → detect → emit
         FacePositionResolver.kt      — resolve(frame, id, mapper?) → PanTilt?
-        SpotlightController.kt       — FacePositionResolver + ArtNetSender (оркестрация)
+        SpotlightController.kt       — FacePositionResolver + DmxSender (оркестрация)
     ui/
         CameraPreview.kt             — Image + FaceOverlay; onRawClick для калибровки
         TrackingScreen.kt            — превью + плавающий тулбар

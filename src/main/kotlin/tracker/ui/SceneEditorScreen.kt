@@ -23,9 +23,9 @@ import kotlinx.coroutines.flow.StateFlow
 import tracker.app.DetectedFrame
 import tracker.domain.entity.CalibrationData
 import tracker.domain.entity.CalibrationPoint
-import tracker.domain.usecase.CalibrationUseCase
 import tracker.domain.entity.FixtureConfig
 import tracker.domain.entity.SceneData
+import tracker.domain.usecase.CalibrationUseCase
 
 /**
  * EN: Composable for creating or editing a [SceneData].
@@ -52,17 +52,20 @@ import tracker.domain.entity.SceneData
  *
  * [frameFlow] должен предоставляться вызывающей стороной (тот же pipeline что и на главном экране).
  *
- * @param initial     scene to pre-populate fields with, or null for a blank scene /
- *                    сцена для предзаполнения полей, null — пустая сцена
- * @param frameFlow   live camera frames for the calibration preview /
- *                    живые кадры камеры для превью калибровки
- * @param onSaved     called with the final [SceneData] / вызывается с итоговой [SceneData]
- * @param onCancelled called when the user discards changes / вызывается при отмене
+ * @param initial              scene to pre-populate fields with, or null for a blank scene /
+ *                             сцена для предзаполнения полей, null — пустая сцена
+ * @param frameFlow            live camera frames for the calibration preview /
+ *                             живые кадры камеры для превью калибровки
+ * @param validateCalibration  validates 4 points before saving; returns failure with a message on bad geometry /
+ *                             валидирует 4 точки перед сохранением; возвращает failure с сообщением при плохой геометрии
+ * @param onSaved              called with the final [SceneData] / вызывается с итоговой [SceneData]
+ * @param onCancelled          called when the user discards changes / вызывается при отмене
  */
 @Composable
 fun SceneEditorScreen(
     initial: SceneData?,
     frameFlow: StateFlow<DetectedFrame?>,
+    validateCalibration: (List<CalibrationPoint>) -> Result<Unit>,
     onSaved: (SceneData) -> Unit,
     onCancelled: () -> Unit,
 ) {
@@ -268,7 +271,7 @@ fun SceneEditorScreen(
             Button(
                 onClick = {
                     val calibData = if (calibPoints.size == 4) {
-                        val result = CalibrationUseCase.buildMapper(calibPoints)
+                        val result = validateCalibration(calibPoints)
                         if (result.isFailure) {
                             calibError = "Калибровка недействительна: точки слишком близко или лежат на одной прямой. " +
                                 "Расположите 4 точки в углах площадки (как крест или прямоугольник)."

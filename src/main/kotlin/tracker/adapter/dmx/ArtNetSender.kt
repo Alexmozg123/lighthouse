@@ -3,6 +3,7 @@ package tracker.adapter.dmx
 import ch.bildspur.artnet.ArtNetClient
 import tracker.domain.entity.DmxFixture
 import tracker.domain.entity.PanTilt
+import tracker.domain.usecase.DmxSender
 
 /**
  * EN: Art-Net UDP transport for a fixed set of [DmxFixture]s.
@@ -16,7 +17,7 @@ import tracker.domain.entity.PanTilt
  *
  * @param fixtures fixtures to drive / управляемые фикстуры
  */
-class ArtNetSender(private val fixtures: List<DmxFixture>) : AutoCloseable {
+class ArtNetSender(private val fixtures: List<DmxFixture>) : DmxSender {
 
     private val artnet = ArtNetClient().also { it.start() }
 
@@ -29,7 +30,7 @@ class ArtNetSender(private val fixtures: List<DmxFixture>) : AutoCloseable {
      *
      * @param position target position or null for blackout / целевая позиция или null для блэкаута
      */
-    fun send(position: PanTilt?) {
+    override fun send(position: PanTilt?) {
         fixtures.forEach { fixture ->
             if (position != null) {
                 fixture.setPanTilt(position.pan, position.tilt, dimmer = 1f)

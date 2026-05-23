@@ -62,6 +62,7 @@ fun main() {
                         is AppScreen.SceneEditor -> SceneEditorScreen(
                             initial = screen.scene,
                             frameFlow = viewModel.frameFlow,
+                            validateCalibration = { viewModel.validateCalibration(it) },
                             onSaved = { viewModel.onSceneSaved(it) },
                             onCancelled = { viewModel.navigateBack() },
                         )

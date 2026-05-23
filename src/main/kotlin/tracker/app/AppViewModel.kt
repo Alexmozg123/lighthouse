@@ -37,15 +37,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import tracker.adapter.dmx.ArtNetSender
+import tracker.domain.entity.CalibrationPoint
 import tracker.domain.entity.DmxFixture
 import tracker.domain.entity.SceneData
 import tracker.domain.repository.SceneRepository
 import tracker.domain.usecase.CalibrationUseCase
+import tracker.domain.usecase.DmxSenderFactory
+import tracker.domain.usecase.MapperFactory
 
 class AppViewModel(
     private val pipeline: TrackingPipeline,
     private val repo: SceneRepository,
+    private val mapperFactory: MapperFactory,
+    private val senderFactory: DmxSenderFactory,
 ) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -91,7 +95,7 @@ class AppViewModel(
 
         var mapperOk = false
         val mapper = scene.calibration?.let { cal ->
-            CalibrationUseCase.buildMapper(cal.points)
+            CalibrationUseCase.buildMapper(cal.points, mapperFactory)
                 .onSuccess { mapperOk = true }
                 .getOrNull()
         }
@@ -103,7 +107,7 @@ class AppViewModel(
         }
 
         spotlight = SpotlightController(
-            sender = ArtNetSender(scene.fixtures.map { cfg ->
+            sender = senderFactory.create(scene.fixtures.map { cfg ->
                 DmxFixture(cfg.host, cfg.subnet, cfg.universe, cfg.startChannel)
             }),
             mapper = mapper,
@@ -154,6 +158,22 @@ class AppViewModel(
     fun selectFace(id: Int?) {
         _selectedIdFlow.value = id
     }
+
+    /**
+     * EN: Validates [points] for the calibration wizard without persisting anything.
+     * Delegates to [CalibrationUseCase.buildMapper] and discards the mapper if successful.
+     * Called by [tracker.ui.SceneEditorScreen] before the user saves a scene.
+     *
+     * RU: Валидирует [points] для визарда калибровки без сохранения.
+     * Делегирует [CalibrationUseCase.buildMapper] и отбрасывает маппер при успехе.
+     * Вызывается [tracker.ui.SceneEditorScreen] перед сохранением сцены.
+     *
+     * @param points calibration points to validate / точки калибровки для проверки
+     * @return [Result.success] if geometry is valid, [Result.failure] otherwise /
+     *         [Result.success] если геометрия корректна, [Result.failure] иначе
+     */
+    fun validateCalibration(points: List<CalibrationPoint>): Result<Unit> =
+        CalibrationUseCase.buildMapper(points, mapperFactory).map { }
 
     /**
      * EN: Navigates to the scene list screen.

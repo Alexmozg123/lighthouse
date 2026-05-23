@@ -54,8 +54,11 @@ src/main/kotlin/tracker/
     domain/entity/DmxFixture.kt                  # 16-bit pan/tilt DMX-буфер
     domain/entity/PanTilt.kt                     # нормализованные pan/tilt [0,1]
     domain/usecase/PositionMapper.kt              # интерфейс map(px,py)→(pan,tilt)
+    domain/usecase/MapperFactory.kt              # output port: CalibrationData→Result<PositionMapper>
+    domain/usecase/DmxSender.kt                  # output port: send(PanTilt?) к фикстурам
+    domain/usecase/DmxSenderFactory.kt           # output port: создаёт DmxSender per-scene
     domain/usecase/FaceTracker.kt                # стабильные ID (IoU фаза1 + centroid фаза2)
-    domain/usecase/CalibrationUseCase.kt         # isDuplicatePanTilt + buildMapper→Result<PositionMapper>
+    domain/usecase/CalibrationUseCase.kt         # isDuplicatePanTilt + buildMapper(points, MapperFactory)
     domain/repository/SceneRepository.kt         # интерфейс персистентности сцен
 
     # ── Adapter (зависит от domain) ──────────────────────────────────────────
@@ -70,7 +73,7 @@ src/main/kotlin/tracker/
     app/AppViewModel.kt                          # навигация, scenes StateFlow, spotlight lifecycle
     app/TrackingPipeline.kt                      # Flow<DetectedFrame>: capture → detect → emit; владеет YuNetDetector
     app/FacePositionResolver.kt                  # resolve(frame,id,mapper?)→PanTilt?
-    app/SpotlightController.kt                   # FacePositionResolver + ArtNetSender (оркестрация)
+    app/SpotlightController.kt                   # FacePositionResolver + DmxSender (оркестрация)
 
     # ── UI (только Compose, зависит от app + domain) ─────────────────────────
     ui/CameraPreview.kt                          # Image + FaceOverlay; onRawClick для калибровки
@@ -96,8 +99,6 @@ domain  ←─── adapter ←─── app ←─── ui
 - **`adapter/`** — реализации интерфейсов из domain; зависит от нативных библиотек.
 - **`app/`** — точка сборки: AppViewModel связывает adapter и domain; TrackingPipeline — единственное место, где `DetectedFrame` (с `ImageBitmap`) пересекает границу adapter→app; `FacePositionResolver` и `SpotlightController` — оркестрация domain+adapter.
 - **`ui/`** — Compose-экраны; зависят только от `app/` и `domain/entity/`; не импортируют `adapter/` напрямую.
-
-Остаточное прагматичное исключение: `CalibrationUseCase.buildMapper` (domain) инстанциирует `HomographyMapper` (adapter) внутри себя, однако возвращает `Result<PositionMapper>` — вызывающий код зависит только от domain-интерфейса. Прямого вызова OpenCV в domain нет.
 
 ## Архитектурные принципы
 
