@@ -19,7 +19,8 @@ import tracker.domain.usecase.DmxSender
  */
 class ArtNetSender(private val fixtures: List<DmxFixture>) : DmxSender {
 
-    private val artnet = ArtNetClient().also { it.start() }
+    // Listen on port 0 (OS picks ephemeral port) so we don't conflict with QLC+ on 6454.
+    private val artnet = ArtNetClient(null, 0, 6454).also { it.start() }
 
     /**
      * EN: Encodes [position] into every fixture's DMX buffer and unicasts the result.

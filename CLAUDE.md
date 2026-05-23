@@ -131,6 +131,7 @@ domain  ←─── adapter ←─── app ←─── ui
 - **`FaceDetectorYN.create` в JavaCV 1.5.10** требует 8 аргументов (добавили `backend_id`, `target_id`), а не 6 как в других обёртках.
 - **SIGSEGV при закрытии окна (exit 134)**: `DisposableEffect.onDispose` вызывает `detector.close()` на главном потоке, пока IO-поток ещё внутри нативного `FaceDetectorYN.detect()` — use-after-free в `libopencv_dnn`. Решено: `detect()` и `close()` в `YuNetDetector` обёрнуты в `synchronized(lock)` с `@Volatile closed` флагом.
 - **`findHomography` возвращает пустой Mat на вырожденных точках**: если 4 точки коллинеарны или все destination (pan/tilt) одинаковы — `createIndexer()` падает с NPE (`ptr is null`). Решено: `check(!H.isNull && !H.empty())` в `HomographyMapper.init`; `runCatching` в `Main.kt` при создании маппера; валидация дубликатов и пробный `HomographyMapper` перед сохранением в `SceneEditorScreen`.
+- **`ArtNetClient.start()` конфликтует с QLC+ на порту 6454**: оба процесса биндятся на `*:6454`, unicast-пакет достаётся одному из них. Решено: `ArtNetClient(null, 0, 6454)` — слушаем на эфемерном порту (OS выбирает), шлём на 6454. QLC+ остаётся единственным слушателем на 6454 и получает все пакеты.
 - **`derivedStateOf` не подходит для ресурсов с lifecycle**: `SpotlightController` (держит `ArtNetClient`) создавался в `derivedStateOf` — при исключении внутри него падал весь AWT-поток. Заменено на `DisposableEffect(activeScene)` с явным `close()` в `onDispose`.
 
 ## Документация в коде
@@ -160,5 +161,4 @@ domain  ←─── adapter ←─── app ←─── ui
 
 ## Что не сделано
 
-- One-Euro filter сглаживания движения выбранного лица.
 - Edge cases: лицо пропало (сейчас blackout; hold-last — в планах), потеря камеры.
